@@ -11,31 +11,44 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ==============================================================================
 -- 2. USER PROFILES TABLE (Linked to auth.users)
+-- Simple authentication: Any standard email is supported (e.g. Gmail, Outlook, personal, work).
+-- NO institutional email requirement or domain restrictions.
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   full_name TEXT,
-  role TEXT DEFAULT 'researcher' CHECK (role IN ('researcher', 'evaluator', 'guest', 'admin')),
-  institution TEXT DEFAULT 'Yenepoya Institute of Technology',
+  role TEXT DEFAULT 'researcher' CHECK (role IN ('researcher', 'evaluator', 'guest', 'admin', 'operator')),
+  avatar_url TEXT,
+  preferred_crop TEXT DEFAULT 'Tomato',
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public profiles are viewable by authenticated users"
+-- Allow reading public profiles for collaborative monitoring and researcher attribution
+DROP POLICY IF EXISTS "Public profiles are viewable by authenticated users" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles are viewable by anyone" ON public.profiles;
+CREATE POLICY "Profiles are viewable by anyone"
   ON public.profiles FOR SELECT
-  TO authenticated
   USING (true);
 
+-- Allow authenticated users to insert and manage their own profile
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+CREATE POLICY "Users can insert their own profile"
+  ON public.profiles FOR INSERT
+  TO authenticated
+  WITH CHECK ((select auth.uid()) = id);
+
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile"
   ON public.profiles FOR UPDATE
   TO authenticated
   USING ((select auth.uid()) = id)
   WITH CHECK ((select auth.uid()) = id);
 
--- Trigger to automatically create profile on Supabase auth.users signup
+-- Trigger to automatically create or sync profile on Supabase auth.users signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -44,9 +57,12 @@ BEGIN
     new.id,
     new.email,
     COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
-    'researcher'
+    COALESCE(new.raw_user_meta_data->>'role', 'researcher')
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    full_name = COALESCE(EXCLUDED.full_name, public.profiles.full_name),
+    updated_at = now();
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

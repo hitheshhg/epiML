@@ -27,13 +27,19 @@ export async function GET() {
       .select("id")
       .limit(1);
 
-    const tablesExist = !sessionErr && !profileErr && !datasetErr;
+    const { data: userProfileData, error: userProfileErr } = await supabase
+      .from("profiles")
+      .select("id")
+      .limit(1);
+
+    const tablesExist = !sessionErr && !profileErr && !datasetErr && !userProfileErr;
 
     return NextResponse.json({
       status: tablesExist ? "ready" : "pending_migration",
       configured: true,
       tablesExist,
       errors: {
+        profiles: userProfileErr ? userProfileErr.message : null,
         monitoring_sessions: sessionErr ? sessionErr.message : null,
         plant_profiles: profileErr ? profileErr.message : null,
         verified_dataset: datasetErr ? datasetErr.message : null,

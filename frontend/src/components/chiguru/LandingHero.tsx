@@ -1,13 +1,35 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Sprout, ArrowRight, Play, Eye, Layers, Compass, CheckCircle2, Usb } from "lucide-react";
+import {
+  Sprout,
+  ArrowRight,
+  Play,
+  Eye,
+  Layers,
+  Compass,
+  CheckCircle2,
+  Usb,
+  User,
+  Lock,
+  Mail,
+  Loader2,
+  ShieldCheck,
+  AlertCircle,
+  LogOut,
+  Sparkles
+} from "lucide-react";
+import { supabase, isSupabaseConfigured, setLocalUser, ChiguruUser } from "@/lib/supabaseClient";
 
 interface LandingHeroProps {
   onStartMonitoring: () => void;
   onLearnMore: () => void;
   onOpenJuryFlow: () => void;
   onOpenHardwareModal?: () => void;
+  user?: ChiguruUser | null;
+  onAuthenticated?: (user: ChiguruUser) => void;
+  onOpenDashboard?: () => void;
+  onLogout?: () => void;
 }
 
 export default function LandingHero({
@@ -15,9 +37,22 @@ export default function LandingHero({
   onLearnMore,
   onOpenJuryFlow,
   onOpenHardwareModal,
+  user,
+  onAuthenticated,
+  onOpenDashboard,
+  onLogout,
 }: LandingHeroProps) {
   // Animated progression: Seed (0) -> Emergence (1) -> Young Seedling (2)
   const [animStage, setAnimStage] = useState<number>(0);
+
+  // Embedded Landing Auth State (Simple Sign In / Sign Up right on /)
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -25,6 +60,98 @@ export default function LandingHero({
     }, 2800);
     return () => clearInterval(timer);
   }, []);
+
+  const handleInlineAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthSuccess(null);
+
+    if (!email || !password) {
+      setAuthError("Please provide both email and password.");
+      return;
+    }
+
+    setAuthLoading(true);
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        if (authMode === "signup") {
+          const { data, error: signUpErr } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name: fullName.trim() || email.split("@")[0],
+              },
+            },
+          });
+          if (signUpErr) throw signUpErr;
+
+          if (data.session && data.user) {
+            const newUser: ChiguruUser = {
+              id: data.user.id,
+              email: data.user.email || email,
+              name: fullName.trim() || data.user.email?.split("@")[0],
+              role: "researcher",
+            };
+            setLocalUser(newUser);
+            if (onAuthenticated) onAuthenticated(newUser);
+          } else if (data.user) {
+            setAuthSuccess("Account created! Check email or sign in below.");
+            setAuthMode("signin");
+          }
+        } else {
+          // Sign In
+          const { data, error: signInErr } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (signInErr) throw signInErr;
+
+          if (data.user) {
+            const authedUser: ChiguruUser = {
+              id: data.user.id,
+              email: data.user.email || email,
+              name:
+                (data.user.user_metadata?.full_name as string) ||
+                (data.user.user_metadata?.name as string) ||
+                data.user.email?.split("@")[0],
+              role: "researcher",
+            };
+            setLocalUser(authedUser);
+            if (onAuthenticated) onAuthenticated(authedUser);
+          }
+        }
+      } else {
+        // Fallback local guest login
+        const guestUser: ChiguruUser = {
+          id: "local-user-session",
+          email: email || "researcher@example.com",
+          name: fullName.trim() || (email ? email.split("@")[0] : "Dr. Researcher"),
+          role: "researcher",
+        };
+        setLocalUser(guestUser);
+        if (onAuthenticated) onAuthenticated(guestUser);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setAuthError(msg);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleInstantGuestLogin = () => {
+    const guestUser: ChiguruUser = {
+      id: "evaluator-session-01",
+      email: "evaluator@chiguru.org",
+      name: "Dr. Evaluator (YEN NOVA)",
+      role: "evaluator",
+      isGuest: true,
+    };
+    setLocalUser(guestUser);
+    if (onAuthenticated) onAuthenticated(guestUser);
+  };
 
   return (
     <section className="relative overflow-hidden pt-10 pb-16 sm:pt-16 sm:pb-20 border-b border-[#E2E8DC] bg-gradient-to-b from-[#FAFBF9] via-[#F4F7F2] to-white">
@@ -98,6 +225,236 @@ export default function LandingHero({
           </p>
         </div>
 
+        {/* ========================================================================= */}
+        {/* SIMPLE SIGN IN / SIGN UP CARD ON ROOT (LANDING PAGE) */}
+        {/* ========================================================================= */}
+        <div className="mt-12 max-w-xl mx-auto bg-white rounded-3xl border border-[#D5E0D0] shadow-lg shadow-black/5 p-6 sm:p-7">
+          
+          {user ? (
+            /* Logged-In Active User Callout with Complete Covered Profile Summary */
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+                <div className="flex items-center gap-3.5">
+                  <div className="relative">
+                    <div className="w-13 h-13 rounded-2xl bg-[#EBF2E8] text-[#2D6A4F] flex items-center justify-center font-black text-xl border border-[#B7D1C5] shadow-xs">
+                      {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#2D6A4F] border-2 border-white ring-1 ring-[#52B788]" title="Active Session" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 justify-center sm:justify-start">
+                      <span className="text-base font-extrabold text-[#163828]">
+                        Welcome, {user.name || user.email.split("@")[0]}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#EBF2E8] text-[#2D6A4F] uppercase border border-[#B7D1C5]">
+                        {user.role}
+                      </span>
+                      {user.isGuest && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                          Demo Mode
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[#52796F] mt-0.5">
+                      {user.email} • Session Authenticated
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={onOpenDashboard || onStartMonitoring}
+                    className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-xs font-bold bg-[#2D6A4F] hover:bg-[#1B4332] text-white shadow-md shadow-[#2D6A4F]/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    <span>Open Dashboard</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                  {onLogout && (
+                    <button
+                      onClick={onLogout}
+                      title="Sign Out"
+                      className="p-2.5 rounded-xl bg-[#FAFBF9] hover:bg-black/5 text-[#52796F] hover:text-[#163828] border border-[#D5E0D0] transition-all"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Covered profile preview bar */}
+              <div className="p-3 rounded-2xl bg-[#F4F7F2] border border-[#E2E8DC] text-xs text-[#2D6A4F] flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#2D6A4F]" />
+                  <span>Profile verified • Full actuator & computer vision controls active</span>
+                </span>
+                <span className="font-mono text-[11px] text-[#52796F]">
+                  ID: {user.id.slice(0, 14)}...
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* Unauthenticated: Simple Sign In & Sign Up Form */
+            <div className="space-y-4">
+              
+              {/* Tab Header: Sign In vs Sign Up */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E8EFE5] pb-3">
+                <div>
+                  <h3 className="text-base font-extrabold text-[#163828]">
+                    {authMode === "signin" ? "Sign In to Chiguru" : "Create Research Account"}
+                  </h3>
+                  <p className="text-xs text-[#52796F] mt-0.5">
+                    {authMode === "signin"
+                      ? "Sign in with any email (Gmail, personal, work) to open your dashboard."
+                      : "Simple signup with any email address. No institutional email required."}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-[#F4F7F2] border border-[#E2E8DC] text-xs font-bold self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("signin");
+                      setAuthError(null);
+                      setAuthSuccess(null);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      authMode === "signin"
+                        ? "bg-[#2D6A4F] text-white shadow-xs"
+                        : "text-[#52796F] hover:text-[#163828]"
+                    }`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("signup");
+                      setAuthError(null);
+                      setAuthSuccess(null);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      authMode === "signup"
+                        ? "bg-[#2D6A4F] text-white shadow-xs"
+                        : "text-[#52796F] hover:text-[#163828]"
+                    }`}
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Alerts */}
+              {authError && (
+                <div className="p-3 rounded-xl bg-[#FFF5F3] border border-[#FAD2CA] text-xs text-[#C85038] flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{authError}</span>
+                </div>
+              )}
+
+              {authSuccess && (
+                <div className="p-3 rounded-xl bg-[#E8F7EC] border border-[#A7E2BA] text-xs text-[#1E4D36] flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-[#2D6A4F]" />
+                  <span>{authSuccess}</span>
+                </div>
+              )}
+
+              {/* Form */}
+              <form onSubmit={handleInlineAuthSubmit} className="space-y-3">
+                
+                {authMode === "signup" && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#163828] mb-1">
+                      Full Name
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder="Alex Morgan"
+                        required={authMode === "signup"}
+                        className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#D5E0D0] focus:border-[#2D6A4F] focus:outline-none text-xs text-[#163828] bg-[#FAFBF9]"
+                      />
+                      <User className="w-4 h-4 text-[#748E84] absolute left-3 top-2.5" />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-[#163828] mb-1">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com (or yourname@gmail.com)"
+                      required
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#D5E0D0] focus:border-[#2D6A4F] focus:outline-none text-xs text-[#163828] bg-[#FAFBF9]"
+                    />
+                    <Mail className="w-4 h-4 text-[#748E84] absolute left-3 top-2.5" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#163828] mb-1">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Min 6 characters"
+                      required
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#D5E0D0] focus:border-[#2D6A4F] focus:outline-none text-xs text-[#163828] bg-[#FAFBF9]"
+                    />
+                    <Lock className="w-4 h-4 text-[#748E84] absolute left-3 top-2.5" />
+                  </div>
+                </div>
+
+                <div className="pt-1 flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-[#2D6A4F] hover:bg-[#1B4332] text-white shadow-sm transition-all flex items-center justify-center gap-1.5"
+                  >
+                    {authLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <span>{authMode === "signin" ? "Sign In & Open Dashboard" : "Create Account & Open Dashboard"}</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleInstantGuestLogin}
+                    className="py-2.5 px-3.5 rounded-xl text-xs font-semibold bg-[#FAFBF9] hover:bg-[#EBF2E8] text-[#163828] border border-[#D5E0D0] transition-all flex items-center justify-center gap-1.5"
+                    title="1-Click immediate demo access"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-[#2D6A4F]" />
+                    <span>1-Click Evaluator</span>
+                  </button>
+                </div>
+              </form>
+
+              <div className="pt-2 border-t border-[#E8EFE5] flex items-center justify-between text-[11px] text-[#748E84]">
+                <span className="flex items-center gap-1 text-[#2D6A4F] font-medium">
+                  <Sparkles className="w-3 h-3 text-[#2D6A4F]" />
+                  <span>No institutional email required</span>
+                </span>
+                <span>Supabase PostgreSQL Auth</span>
+              </div>
+
+            </div>
+          )}
+
+        </div>
+
         {/* Real 40-Cell Tray Interactive Emergence Visualizer */}
         <div className="mt-14 max-w-4xl mx-auto rounded-2xl bg-white border border-[#D5E0D0] p-6 sm:p-8 shadow-sm">
           
@@ -123,12 +480,12 @@ export default function LandingHero({
                     : "text-[#52796F]"
                 }`}
               >
-                1. Seed
+                1. Sown
               </span>
               <span
                 className={`px-2.5 py-1 rounded-lg transition-all ${
                   animStage === 1
-                    ? "bg-[#52B788] text-[#163828]"
+                    ? "bg-[#2D6A4F] text-white"
                     : "text-[#52796F]"
                 }`}
               >
@@ -137,7 +494,7 @@ export default function LandingHero({
               <span
                 className={`px-2.5 py-1 rounded-lg transition-all ${
                   animStage === 2
-                    ? "bg-[#1B4332] text-white"
+                    ? "bg-[#2D6A4F] text-white"
                     : "text-[#52796F]"
                 }`}
               >
@@ -146,71 +503,39 @@ export default function LandingHero({
             </div>
           </div>
 
-          {/* 40-Cell Tray Grid Preview */}
-          <div className="mt-6 grid grid-cols-8 gap-2 sm:gap-2.5">
-            {Array.from({ length: 40 }).map((_, i) => {
-              const cellNum = (i + 1).toString().padStart(2, "0");
-              const isHighlight = i === 16; // C17 showcase
-              const isGerminated = i < 28;
+          {/* Tray Visualization Preview */}
+          <div className="mt-6 grid grid-cols-8 gap-2 max-w-2xl mx-auto p-4 rounded-xl bg-[#F0F4EC] border border-[#E2E8DC]">
+            {Array.from({ length: 40 }).map((_, idx) => {
+              const cellNum = idx + 1;
+              const isGerminated = cellNum === 17 || cellNum === 8 || cellNum === 24 || (animStage >= 1 && (cellNum % 3 === 0));
+              const isEmerging = animStage >= 1 && (cellNum % 5 === 0);
 
               return (
                 <div
-                  key={i}
-                  className={`aspect-square rounded-xl p-1 sm:p-2 border transition-all flex flex-col justify-between ${
-                    isHighlight
-                      ? "bg-[#EBF2E8] border-[#2D6A4F] ring-2 ring-[#2D6A4F]/30 shadow-sm"
-                      : isGerminated
-                      ? "bg-[#F8FAF7] border-[#DCE7D7] hover:border-[#B7D1C5]"
-                      : "bg-[#FDFEFC] border-[#E8ECE4]"
+                  key={idx}
+                  className={`aspect-square rounded-lg border flex flex-col items-center justify-center p-1 transition-all ${
+                    isGerminated
+                      ? "bg-[#D8F3DC] border-[#74C69D] text-[#1B4332]"
+                      : isEmerging
+                      ? "bg-[#FFF3CD] border-[#FFE69C] text-[#856404]"
+                      : "bg-white border-[#E2E8DC] text-[#748E84]"
                   }`}
                 >
-                  <span className={`text-[9px] font-mono font-bold block ${isHighlight ? "text-[#2D6A4F]" : "text-[#748E84]"}`}>
-                    C{cellNum}
+                  <span className="text-[9px] font-mono font-bold leading-none">
+                    C{cellNum < 10 ? `0${cellNum}` : cellNum}
                   </span>
-
-                  {/* Seedling Micro Visual based on animated stage */}
-                  <div className="flex items-center justify-center flex-1">
-                    {isHighlight ? (
-                      <div className="transition-transform duration-500 transform hover:scale-110">
-                        {animStage === 0 && (
-                          <div className="w-2.5 h-3.5 rounded-full bg-[#B78D63] shadow-inner" title="Dormant imbibing seed" />
-                        )}
-                        {animStage === 1 && (
-                          <div className="flex flex-col items-center">
-                            <div className="w-1.5 h-3 rounded-full bg-[#52B788] rotate-12" />
-                            <div className="w-2 h-2 rounded-full bg-[#B78D63]" />
-                          </div>
-                        )}
-                        {animStage === 2 && (
-                          <div className="flex items-center gap-0.5">
-                            <div className="w-2 h-3.5 rounded-full bg-[#2D6A4F] -rotate-12" />
-                            <div className="w-2 h-3.5 rounded-full bg-[#2D6A4F] rotate-12" />
-                          </div>
-                        )}
-                      </div>
-                    ) : isGerminated ? (
-                      <div className="w-2 h-2 rounded-full bg-[#52B788]/60" />
-                    ) : (
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#D5DDD2]" />
-                    )}
-                  </div>
-
-                  <span className="text-[8px] text-center font-mono text-[#84A98C]">
-                    {isHighlight ? (animStage === 0 ? "SEEDED" : (animStage === 1 ? "EMERGE" : "GROW")) : (isGerminated ? "GERM" : "SEED")}
-                  </span>
+                  <div
+                    className={`w-2 h-2 rounded-full mt-1 ${
+                      isGerminated
+                        ? "bg-[#2D6A4F]"
+                        : isEmerging
+                        ? "bg-[#E76F51]"
+                        : "bg-[#D5E0D0]"
+                    }`}
+                  />
                 </div>
               );
             })}
-          </div>
-
-          <div className="mt-5 flex items-center justify-between text-xs text-[#52796F] font-mono pt-3 border-t border-[#E8EFE5]">
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#2D6A4F]" />
-              Persistent Identity for every cell (C01–C40)
-            </span>
-            <span className="hidden sm:inline text-[#748E84]">
-              Click any cell inside the Monitor to inspect individual emergence history
-            </span>
           </div>
 
         </div>

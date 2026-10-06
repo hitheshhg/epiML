@@ -47,7 +47,14 @@ import {
   RotateCcw,
   Sliders,
   Play,
-  Usb
+  Usb,
+  User,
+  LogOut,
+  ShieldCheck,
+  Sparkles,
+  Layers,
+  Thermometer,
+  Droplets
 } from "lucide-react";
 
 export default function Home() {
@@ -156,6 +163,15 @@ export default function Home() {
       }
     }
   }, []);
+
+  // Instantly pop the Dashboard covering profile information upon login
+  const handleAuthenticated = (u: ChiguruUser) => {
+    setUser(u);
+    setActiveTab("monitor");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   // Poll /api/telemetry continuously every 1.2s if not connected via direct serial
   const fetchTelemetry = useCallback(async () => {
@@ -405,20 +421,23 @@ export default function Home() {
   // 2-Minute Jury Tour Flow (Section 64)
   const handleTriggerJuryDemo = () => {
     // 1. Ensure user is logged in
-    setUser({
+    const evaluatorUser: ChiguruUser = {
       id: "evaluator-session-01",
-      email: "evaluator@yenepoya.edu.in",
+      email: "evaluator@chiguru.org",
       name: "Dr. Evaluator (YEN NOVA)",
       role: "evaluator",
       isGuest: true,
-    });
+    };
+    setUser(evaluatorUser);
+    setLocalUser(evaluatorUser);
     // 2. Switch to monitor tab
     setActiveTab("monitor");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     // 3. Highlight signature cell C17
     setSelectedCellId("C17");
-    // 4. Scrub timeline to Hour 48 (C17 emergence)
-    const pt = timeline.find((p) => p.elapsedHours === 48);
-    // 5. Send acoustic confirmation
+    // 4. Send acoustic confirmation
     sendCommand("BUZZ:1");
   };
 
@@ -461,6 +480,13 @@ export default function Home() {
               }}
               onOpenJuryFlow={handleTriggerJuryDemo}
               onOpenHardwareModal={() => setIsHardwareModalOpen(true)}
+              user={user}
+              onAuthenticated={handleAuthenticated}
+              onOpenDashboard={() => setActiveTab("monitor")}
+              onLogout={async () => {
+                await signOutUser();
+                setUser(null);
+              }}
             />
 
             <LandingStory
@@ -473,61 +499,189 @@ export default function Home() {
         {activeTab === "monitor" && (
           <div className="space-y-8 animate-in fade-in duration-200">
             
-            {/* Session Status Top Bar */}
-            <div className="p-4 rounded-2xl bg-white border border-[#D5E0D0] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#2D6A4F] text-white flex items-center justify-center">
-                  <Sprout className="w-5 h-5 text-[#D8F3DC]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-extrabold text-[#163828]">
-                      {activeProfile.commonName}
-                    </h2>
-                    <span className="text-xs text-[#52796F] italic">
-                      ({activeProfile.scientificName})
-                    </span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#EBF2E8] text-[#2D6A4F] font-bold">
-                      Session: {sessionId}
-                    </span>
+            {/* ========================================================================= */}
+            {/* USER PROFILE & NURSERY CHAMBER COVER COMMAND DECK */}
+            {/* ========================================================================= */}
+            <div className="rounded-3xl bg-gradient-to-br from-[#163828] via-[#1B4332] to-[#2D6A4F] text-white shadow-xl shadow-black/10 border border-[#2D6A4F]/40 overflow-hidden">
+              
+              {/* Top Profile Header Bar */}
+              <div className="p-6 sm:p-7 border-b border-white/10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                
+                {/* User Identity Covered */}
+                <div className="flex items-center gap-4">
+                  <div className="relative shrink-0">
+                    <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center font-black text-2xl text-white shadow-inner">
+                      {user?.name ? user.name.charAt(0).toUpperCase() : (user?.email ? user.email.charAt(0).toUpperCase() : "R")}
+                    </div>
+                    <span
+                      className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#52B788] border-2 border-[#163828] shadow-sm animate-pulse"
+                      title="Active Live Session"
+                    />
                   </div>
-                  <p className="text-xs text-[#748E84]">
-                    Optimal: {activeProfile.temperatureGuidance.optimal}°C • Moisture Target: {activeProfile.moistureGuidance.monitoringTarget}
-                  </p>
+
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
+                        {user?.name || (user?.email ? user.email.split("@")[0] : "Researcher")}
+                      </h2>
+                      <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-white/20 text-white uppercase border border-white/30 tracking-wider">
+                        {user?.role || "RESEARCHER"}
+                      </span>
+                      {user?.isGuest ? (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-400/25 text-amber-200 border border-amber-300/30">
+                          Guest Demo Session
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#52B788]/25 text-[#D8F3DC] border border-[#52B788]/40">
+                          <ShieldCheck className="w-3 h-3 text-[#52B788]" />
+                          <span>Supabase Verified</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs sm:text-sm text-white/80 mt-1 flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-white/95">{user?.email || "evaluator@chiguru.org"}</span>
+                      <span>•</span>
+                      <span>Session ID: <strong className="font-mono text-white">{sessionId}</strong></span>
+                      <span>•</span>
+                      <span className="text-[#D8F3DC] font-medium">Standard Email Auth Active</span>
+                    </p>
+                  </div>
                 </div>
+
+                {/* Right Action Controls */}
+                <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto">
+                  <button
+                    onClick={() => setIsPlantSearchOpen(true)}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-[#163828] hover:bg-[#F4F7F2] transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    <Sprout className="w-4 h-4 text-[#2D6A4F]" />
+                    <span>Change Seed</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsHardwareModalOpen(true)}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                      telemetry.is_hardware_live || serialConnected
+                        ? "bg-[#52B788]/30 hover:bg-[#52B788]/40 text-[#D8F3DC] border-[#52B788]/50"
+                        : "bg-white/10 hover:bg-white/20 text-white border-white/25"
+                    }`}
+                  >
+                    <Usb className="w-4 h-4" />
+                    <span>
+                      {telemetry.is_hardware_live || serialConnected
+                        ? "Hardware Live"
+                        : "Connect Hardware"}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={handleTriggerJuryDemo}
+                    className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#E76F51]/20 hover:bg-[#E76F51]/30 text-[#FFDDD2] border border-[#E76F51]/40 transition-all flex items-center gap-1.5"
+                  >
+                    <Play className="w-3.5 h-3.5 text-[#E76F51]" />
+                    <span>Jury Tour</span>
+                  </button>
+
+                  {user ? (
+                    <button
+                      onClick={async () => {
+                        await signOutUser();
+                        setUser(null);
+                        setActiveTab("home");
+                      }}
+                      className="px-3 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white/80 hover:text-white border border-white/20 transition-all flex items-center gap-1.5"
+                      title="Sign Out"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsAuthOpen(true)}
+                      className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-white text-[#163828] hover:bg-[#F4F7F2] transition-all shadow-sm"
+                    >
+                      Sign In
+                    </button>
+                  )}
+                </div>
+
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsHardwareModalOpen(true)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${
-                    telemetry.is_hardware_live || serialConnected
-                      ? "bg-[#EBF2E8] text-[#2D6A4F] border-[#B7D1C5] hover:bg-[#DDF0DC]"
-                      : "bg-[#FFF9F5] text-[#C85038] border-[#F2C4B8] hover:bg-[#FDECE8]"
-                  }`}
-                  title="Connect physical Arduino Uno (COM port)"
-                >
-                  <Usb className="w-3.5 h-3.5" />
-                  <span>
-                    {telemetry.is_hardware_live || serialConnected
-                      ? "Hardware Connected"
-                      : "Connect Hardware"}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setIsPlantSearchOpen(true)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-[#2D6A4F] hover:bg-[#EBF2E8] border border-[#D5E0D0] transition-all"
-                >
-                  Change Seed
-                </button>
-                <button
-                  onClick={handleTriggerJuryDemo}
-                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#E76F51]/10 text-[#C85038] hover:bg-[#E76F51]/20 border border-[#E76F51]/30 transition-all flex items-center gap-1.5"
-                >
-                  <Play className="w-3.5 h-3.5 text-[#E76F51]" />
-                  <span>Jury Tour</span>
-                </button>
+              {/* Covered Profile & Nursery Context Metrics Strip (4 Sub-Cards) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-white/10 bg-black/15 backdrop-blur-xs">
+                
+                {/* 1. Target Seed / Crop */}
+                <div className="p-4 sm:p-5">
+                  <div className="text-[11px] font-bold text-white/60 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <Sprout className="w-3.5 h-3.5 text-[#52B788]" />
+                    <span>Target Seed Profile</span>
+                  </div>
+                  <div className="text-base font-extrabold text-white">
+                    {activeProfile.commonName}
+                  </div>
+                  <div className="text-xs text-white/70 italic mt-0.5">
+                    {activeProfile.scientificName}
+                  </div>
+                  <div className="text-[11px] text-[#D8F3DC] font-medium mt-1">
+                    Stage: {activeProfile.growthStage.toUpperCase()} ({activeProfile.germinationWindow.minDays}–{activeProfile.germinationWindow.maxDays}d)
+                  </div>
+                </div>
+
+                {/* 2. 40-Cell Tray Matrix */}
+                <div className="p-4 sm:p-5">
+                  <div className="text-[11px] font-bold text-white/60 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-[#52B788]" />
+                    <span>40-Cell Tray Matrix</span>
+                  </div>
+                  <div className="text-base font-extrabold text-white">
+                    {cells.filter((c) => c.state === "GROWING" || c.state === "EMERGING").length} of 40 Emerged
+                  </div>
+                  <div className="text-xs text-white/70 mt-0.5">
+                    Emergence Rate: {Math.round((cells.filter((c) => c.state === "GROWING" || c.state === "EMERGING").length / 40) * 100)}%
+                  </div>
+                  <div className="text-[11px] text-[#D8F3DC] font-medium mt-1">
+                    Overhead CV Geometry: 420mm Fixed
+                  </div>
+                </div>
+
+                {/* 3. Optimal Targets */}
+                <div className="p-4 sm:p-5">
+                  <div className="text-[11px] font-bold text-white/60 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <Thermometer className="w-3.5 h-3.5 text-[#52B788]" />
+                    <span>Target Microclimate</span>
+                  </div>
+                  <div className="text-base font-extrabold text-white">
+                    {activeProfile.temperatureGuidance.optimal}°C • {activeProfile.humidityGuidance.optimal}% RH
+                  </div>
+                  <div className="text-xs text-white/70 mt-0.5">
+                    Moisture: {activeProfile.moistureGuidance.monitoringTarget}
+                  </div>
+                  <div className="text-[11px] text-[#D8F3DC] font-medium mt-1">
+                    Canopy Shade Target: {activeProfile.lightGuidance.canopyShadeTarget}%
+                  </div>
+                </div>
+
+                {/* 4. Actuator & Hardware Link */}
+                <div className="p-4 sm:p-5">
+                  <div className="text-[11px] font-bold text-white/60 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <Usb className="w-3.5 h-3.5 text-[#52B788]" />
+                    <span>Chamber Link</span>
+                  </div>
+                  <div className="text-base font-extrabold text-white flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${telemetry.is_hardware_live || serialConnected ? "bg-[#52B788] animate-pulse" : "bg-amber-400"}`} />
+                    <span>{telemetry.is_hardware_live || serialConnected ? "USB Serial (115200)" : "Simulated Chamber"}</span>
+                  </div>
+                  <div className="text-xs text-white/70 mt-0.5">
+                    Pump: {telemetry.pump ? "RUNNING (D13)" : "STANDBY (D13)"} • Vent: {telemetry.vent_angle}°
+                  </div>
+                  <div className="text-[11px] text-[#D8F3DC] font-medium mt-1">
+                    Fan: {telemetry.fan ? "Active" : "Off"} • Gas: {telemetry.gas} ppm
+                  </div>
+                </div>
+
               </div>
+
             </div>
 
             {/* Central Two-Column Layout: 40-Cell Tray (Left) + Selected Cell Inspector (Right) */}
@@ -622,7 +776,7 @@ export default function Home() {
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
-        onAuthenticated={(u) => setUser(u)}
+        onAuthenticated={handleAuthenticated}
       />
 
       <HardwareModal

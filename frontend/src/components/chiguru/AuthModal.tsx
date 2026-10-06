@@ -154,7 +154,7 @@ export default function AuthModal({
   const handleInstantEvaluatorLogin = () => {
     const guestUser: ChiguruUser = {
       id: "evaluator-session-01",
-      email: "evaluator@yenepoya.edu.in",
+      email: "evaluator@chiguru.org",
       name: "Dr. Evaluator (YEN NOVA)",
       role: "evaluator",
       isGuest: true,
@@ -179,11 +179,11 @@ export default function AuthModal({
                 {mode === "signin"
                   ? "Sign In to Chiguru"
                   : mode === "signup"
-                  ? "Create Research Account"
+                  ? "Create Account"
                   : "Reset Password"}
               </h3>
               <p className="text-xs text-[#52796F]">
-                Institutional Seedling Monitoring & Research History
+                Standard email login • No institutional domain required
               </p>
             </div>
           </div>
@@ -218,14 +218,14 @@ export default function AuthModal({
             {mode === "signup" && (
               <div>
                 <label className="block text-xs font-bold text-[#163828] mb-1">
-                  Full Name / Researcher Name
+                  Full Name
                 </label>
                 <div className="relative">
                   <input
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Dr. S. Radhakrishnan"
+                    placeholder="Alex Morgan"
                     required={mode === "signup"}
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#D5E0D0] focus:border-[#2D6A4F] focus:outline-none text-xs text-[#163828] bg-[#FAFBF9]"
                   />
@@ -236,14 +236,14 @@ export default function AuthModal({
 
             <div>
               <label className="block text-xs font-bold text-[#163828] mb-1">
-                Institutional Email
+                Email Address
               </label>
               <div className="relative">
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="researcher@yenepoya.edu.in"
+                  placeholder="name@example.com"
                   required
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#D5E0D0] focus:border-[#2D6A4F] focus:outline-none text-xs text-[#163828] bg-[#FAFBF9]"
                 />
