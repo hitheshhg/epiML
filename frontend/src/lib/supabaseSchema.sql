@@ -421,3 +421,61 @@ VALUES
 ON CONFLICT (session_id, cell_id) DO UPDATE SET
   green_area_mm2 = EXCLUDED.green_area_mm2,
   state = EXCLUDED.state;
+
+-- ==============================================================================
+-- 13. USER CROP EXPERIMENTS TABLE
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.experiments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  crop_name TEXT NOT NULL,
+  scientific_name TEXT,
+  emoji TEXT DEFAULT '🌱',
+  status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'PAUSED', 'COMPLETED', 'RUNNING')),
+  current_epoch TEXT DEFAULT 'GERMINATION',
+  current_epoch_name TEXT DEFAULT 'Epoch 1: Imbibition & Radicle Anchor',
+  current_day INT DEFAULT 1,
+  duration_days INT DEFAULT 1,
+  target_temp NUMERIC DEFAULT 25.0,
+  target_humidity NUMERIC DEFAULT 75.0,
+  target_soil_moisture NUMERIC DEFAULT 70.0,
+  target_light_hours INT DEFAULT 14,
+  emergence_rate_pct NUMERIC DEFAULT 0.0,
+  cells_emerged INT DEFAULT 0,
+  total_cells INT DEFAULT 40,
+  avg_temp NUMERIC DEFAULT 24.5,
+  avg_humidity NUMERIC DEFAULT 75.0,
+  actuations_total INT DEFAULT 0,
+  sown_pins JSONB DEFAULT '[]'::jsonb,
+  tray_image_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.experiments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view their own experiments" ON public.experiments;
+CREATE POLICY "Users can view their own experiments"
+  ON public.experiments FOR SELECT
+  TO authenticated
+  USING ((select auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "Users can insert their own experiments" ON public.experiments;
+CREATE POLICY "Users can insert their own experiments"
+  ON public.experiments FOR INSERT
+  TO authenticated
+  WITH CHECK ((select auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "Users can update their own experiments" ON public.experiments;
+CREATE POLICY "Users can update their own experiments"
+  ON public.experiments FOR UPDATE
+  TO authenticated
+  USING ((select auth.uid()) = user_id)
+  WITH CHECK ((select auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "Users can delete their own experiments" ON public.experiments;
+CREATE POLICY "Users can delete their own experiments"
+  ON public.experiments FOR DELETE
+  TO authenticated
+  USING ((select auth.uid()) = user_id);
+

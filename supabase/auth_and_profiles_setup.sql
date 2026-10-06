@@ -112,6 +112,19 @@ CREATE TABLE IF NOT EXISTS public.experiments (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Ensure enhanced telemetry and phenotyping tracking columns exist
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS emoji TEXT DEFAULT '🌱';
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS duration_days INT DEFAULT 1;
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS emergence_rate_pct NUMERIC DEFAULT 0.0;
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS cells_emerged INT DEFAULT 0;
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS total_cells INT DEFAULT 40;
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS avg_temp NUMERIC DEFAULT 24.5;
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS avg_humidity NUMERIC DEFAULT 75.0;
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS actuations_total INT DEFAULT 0;
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS current_epoch_name TEXT DEFAULT 'Epoch 1: Imbibition & Radicle Anchor';
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS sown_pins JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS tray_image_url TEXT;
+
 ALTER TABLE public.experiments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own experiments" ON public.experiments;

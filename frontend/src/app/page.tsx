@@ -42,6 +42,7 @@ import { evaluateDeterministicControl } from "@/lib/control-engine";
 import { supabase } from "@/lib/supabase/client";
 import LoginModal from "@/components/chiguru/LoginModal";
 import UserDashboard from "@/components/chiguru/UserDashboard";
+import TraySowingCanvas, { SownSeedPin } from "@/components/chiguru/TraySowingCanvas";
 
 // Clean GitHub Octocat SVG
 function GitHubIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -61,10 +62,11 @@ export default function HomePage() {
   // "landing" = Main Landing Page
   // "dashboard" = User Profile & Experiment Histories
   // "step-1" = What are you experimenting with? (Seed selection)
+  // "step-tray" = 2D Mud Nursery Tray Sowing & Mud Sampling
   // "step-2" = AI Protocol Generation
   // "step-3" = Deterministic Hardware Link
   // "step-4" = Live Laboratory Chamber Cockpit
-  const [viewState, setViewState] = useState<"landing" | "dashboard" | "step-1" | "step-2" | "step-3" | "step-4">("landing");
+  const [viewState, setViewState] = useState<"landing" | "dashboard" | "step-1" | "step-tray" | "step-2" | "step-3" | "step-4">("landing");
 
   // Authentication State
   const [user, setUser] = useState<{ id: string; email: string; name?: string } | null>(null);
@@ -75,6 +77,13 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [customSeedName, setCustomSeedName] = useState("");
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+
+  // 2D Mud Nursery Tray Sowing State
+  const [sownPins, setSownPins] = useState<SownSeedPin[]>([]);
+  const [trayImageUrl, setTrayImageUrl] = useState<string>("/images/nursery_soil_tray.jpg");
+  const [activeExperiment, setActiveExperiment] = useState<any>(null);
+  const [actuationsCounter, setActuationsCounter] = useState<number>(0);
+  const [cockpitTrayTab, setCockpitTrayTab] = useState<"mud" | "matrix">("mud");
 
   // Live Hardware / Telemetry State
   const [telemetry, setTelemetry] = useState<SensorReading>({
@@ -103,7 +112,7 @@ export default function HomePage() {
   const [cells, setCells] = useState<Array<{ id: string; state: "SOWN" | "EMERGING" | "GROWING" }>>(() =>
     Array.from({ length: 40 }, (_, i) => ({
       id: `C${String(i + 1).padStart(2, "0")}`,
-      state: i < 18 ? "GROWING" : i < 28 ? "EMERGING" : "SOWN",
+      state: "SOWN",
     }))
   );
 
@@ -294,7 +303,7 @@ export default function HomePage() {
 
   const handleSelectSeed = (proto: SeedProtocol) => {
     setSelectedProtocol(proto);
-    setViewState("step-2");
+    setViewState("step-tray");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -305,8 +314,192 @@ export default function HomePage() {
     setSelectedProtocol(customProto);
     setIsCustomModalOpen(false);
     setCustomSeedName("");
+    setViewState("step-tray");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleConfirmTrayMapping = (pins: SownSeedPin[], trayImg: string) => {
+    setSownPins(pins);
+    setTrayImageUrl(trayImg);
+    // Synchronize cells matrix state
+    const mappedCells = pins.map((p) => ({
+      id: p.cellId,
+      state: p.state,
+    }));
+    setCells(
+      mappedCells.length > 0
+        ? mappedCells
+        : Array.from({ length: 40 }, (_, i) => ({
+            id: `C${String(i + 1).padStart(2, "0")}`,
+            state: "SOWN" as const,
+          }))
+    );
     setViewState("step-2");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleLaunchExperiment = async () => {
+    const expId = `EXP-${new Date().getFullYear()}-${selectedProtocol.commonName.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+    const newExp = {
+      id: expId,
+      cropName: selectedProtocol.commonName,
+      scientificName: selectedProtocol.scientificName,
+      emoji: selectedProtocol.emoji,
+      status: "RUNNING" as const,
+      startedAt: new Date().toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      durationDays: 1,
+      emergenceRatePct: 0.0,
+      cellsEmerged: 0,
+      totalCells: sownPins.length > 0 ? sownPins.length : 40,
+      avgTemp: selectedProtocol.epochs[0]?.tempRange.optimal || 24.5,
+      avgHumidity: selectedProtocol.epochs[0]?.humidityRange.optimal || 75.0,
+      actuationsTotal: 0,
+      currentEpochName: selectedProtocol.epochs[0]?.name || "Epoch 1: Imbibition & Radicle Anchor",
+    };
+
+    setActiveExperiment(newExp);
+    setActuationsCounter(0);
+
+    // 1. Immediately store in localStorage so it appears in the dashboard
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("epiml_user_experiments");
+        const list = stored ? JSON.parse(stored) : [];
+        localStorage.setItem(
+          "epiml_user_experiments",
+          JSON.stringify([newExp, ...list.filter((x: any) => x.id !== expId)])
+        );
+      } catch {}
+    }
+
+    // 2. Persist in Supabase experiments table
+    if (supabase && user?.id) {
+      try {
+        await supabase.from("experiments").insert([
+          {
+            id: expId,
+            user_id: user.id,
+            crop_name: newExp.cropName,
+            scientific_name: newExp.scientificName,
+            emoji: newExp.emoji,
+            status: "ACTIVE",
+            current_epoch_name: newExp.currentEpochName,
+            current_day: 1,
+            duration_days: 1,
+            target_temp: newExp.avgTemp,
+            target_humidity: newExp.avgHumidity,
+            emergence_rate_pct: 0.0,
+            cells_emerged: 0,
+            total_cells: newExp.totalCells,
+            actuations_total: 0,
+            sown_pins: sownPins,
+            tray_image_url: trayImageUrl,
+          },
+        ]);
+      } catch (err) {
+        console.warn("Supabase experiment save note:", err);
+      }
+    }
+
+    setViewState("step-4");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCompleteExperiment = async () => {
+    const emergedCount = cells.filter((c) => c.state === "GROWING" || c.state === "EMERGING").length;
+    const totalCount = cells.length > 0 ? cells.length : 40;
+    const emergencePct = Number(((emergedCount / totalCount) * 100).toFixed(1));
+    const targetId = activeExperiment?.id;
+
+    // 1. Update localStorage
+    if (typeof window !== "undefined" && targetId) {
+      try {
+        const stored = localStorage.getItem("epiml_user_experiments");
+        const list = stored ? JSON.parse(stored) : [];
+        const updated = list.map((item: any) => {
+          if (item.id === targetId) {
+            return {
+              ...item,
+              status: "COMPLETED",
+              completedAt: new Date().toLocaleString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              emergenceRatePct: emergencePct,
+              cellsEmerged: emergedCount,
+              actuationsTotal: actuationsCounter,
+            };
+          }
+          return item;
+        });
+        localStorage.setItem("epiml_user_experiments", JSON.stringify(updated));
+      } catch {}
+    }
+
+    // 2. Update Supabase
+    if (supabase && user?.id && targetId) {
+      try {
+        await supabase
+          .from("experiments")
+          .update({
+            status: "COMPLETED",
+            emergence_rate_pct: emergencePct,
+            cells_emerged: emergedCount,
+            actuations_total: actuationsCounter,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", targetId);
+      } catch (err) {
+        console.warn("Supabase experiment update note:", err);
+      }
+    }
+
+    setActiveExperiment(null);
+    setViewState("dashboard");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleTogglePinState = (pinId: string) => {
+    setSownPins((prev) =>
+      prev.map((pin) => {
+        if (pin.id === pinId) {
+          const nextState =
+            pin.state === "SOWN"
+              ? "EMERGING"
+              : pin.state === "EMERGING"
+              ? "GROWING"
+              : "SOWN";
+          return { ...pin, state: nextState };
+        }
+        return pin;
+      })
+    );
+
+    // Also sync cells
+    setCells((prev) =>
+      prev.map((c) => {
+        const matchingPin = sownPins.find((p) => p.id === pinId);
+        if (matchingPin && c.id === matchingPin.cellId) {
+          const nextState =
+            c.state === "SOWN"
+              ? "EMERGING"
+              : c.state === "EMERGING"
+              ? "GROWING"
+              : "SOWN";
+          return { ...c, state: nextState };
+        }
+        return c;
+      })
+    );
   };
 
   const handleSignOut = async () => {
@@ -388,7 +581,7 @@ export default function HomePage() {
                   <span>Experiment Lab</span>
                   {viewState.startsWith("step-") && (
                     <span className="ml-1.5 text-[10px] font-mono opacity-80">
-                      ({viewState.replace("step-", "")}/4)
+                      ({viewState === "step-tray" ? "Tray" : `${viewState.replace("step-", "")}/4`})
                     </span>
                   )}
                 </Button>
@@ -729,6 +922,31 @@ export default function HomePage() {
           )}
 
           {/* ===================================================================== */}
+          {/* VIEW: NURSERY TRAY SOWING & 2D MUD MAPPING */}
+          {/* ===================================================================== */}
+          {viewState === "step-tray" && (
+            <motion.div
+              key="step-tray"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="flex-1 flex flex-col items-center justify-start w-full"
+            >
+              <TraySowingCanvas
+                selectedProtocol={selectedProtocol}
+                initialPins={sownPins}
+                initialImage={trayImageUrl}
+                onConfirmMapping={handleConfirmTrayMapping}
+                onBack={() => {
+                  setViewState("step-1");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              />
+            </motion.div>
+          )}
+
+          {/* ===================================================================== */}
           {/* VIEW 3: STEP 2 OF 4 — AI PROTOCOL GENERATION */}
           {/* ===================================================================== */}
           {viewState === "step-2" && (
@@ -741,7 +959,7 @@ export default function HomePage() {
               className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 py-12 max-w-4xl mx-auto w-full"
             >
               
-              {/* Breadcrumb Navigation: Return to Dashboard or Step 1 */}
+              {/* Breadcrumb Navigation: Return to Dashboard, Step 1, or Mud Tray */}
               <div className="w-full flex items-center justify-between mb-6 pb-3 border-b border-border text-xs">
                 <div className="flex items-center gap-2">
                   <button
@@ -762,7 +980,17 @@ export default function HomePage() {
                     }}
                     className="text-muted-foreground hover:text-foreground font-medium transition-colors"
                   >
-                    Seed Selection
+                    Seeds
+                  </button>
+                  <span className="text-border">/</span>
+                  <button
+                    onClick={() => {
+                      setViewState("step-tray");
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="text-muted-foreground hover:text-foreground font-medium transition-colors"
+                  >
+                    Mud Tray
                   </button>
                 </div>
                 <div className="flex items-center gap-2 font-mono text-muted-foreground">
@@ -863,11 +1091,11 @@ export default function HomePage() {
               <div className="w-full flex items-center justify-between gap-4">
                 <Button
                   variant="outline"
-                  onClick={() => setViewState("step-1")}
+                  onClick={() => setViewState("step-tray")}
                   className="rounded-xl flex items-center gap-1.5 text-xs sm:text-sm"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                  <span>Back to Seeds</span>
+                  <span>Back to Mud Tray</span>
                 </Button>
 
                 <Button
@@ -1009,12 +1237,10 @@ export default function HomePage() {
                 </Button>
 
                 <Button
-                  onClick={() => {
-                    setViewState("step-4");
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  className="rounded-xl bg-primary text-primary-foreground font-semibold text-xs sm:text-sm flex items-center gap-1.5 px-6"
+                  onClick={handleLaunchExperiment}
+                  className="rounded-xl bg-primary text-primary-foreground font-semibold text-xs sm:text-sm flex items-center gap-1.5 px-6 shadow-xs hover:opacity-90"
                 >
+                  <Play className="w-3.5 h-3.5 fill-current" />
                   <span>Launch Active Experiment</span>
                   <ChevronRight className="w-4 h-4" />
                 </Button>
@@ -1075,7 +1301,16 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleCompleteExperiment}
+                      className="rounded-xl bg-primary text-primary-foreground font-semibold text-xs h-9 px-4 flex items-center gap-1.5 shadow-xs hover:opacity-90"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Complete & Record</span>
+                    </Button>
+
                     <Button
                       variant="outline"
                       size="sm"
@@ -1262,42 +1497,170 @@ export default function HomePage() {
                 </div>
               </Card>
 
-              {/* 40-Cell Tray Matrix Visualizer */}
-              <Card className="w-full border border-border bg-card p-6 rounded-2xl shadow-xs">
-                <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
+              {/* Dual-Mode Tray Visualizer: 2D Mud Sampling Map + Matrix */}
+              <Card className="w-full border border-border bg-card p-4 sm:p-6 rounded-3xl shadow-xs overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4 mb-4">
                   <div>
-                    <h3 className="font-semibold text-base text-foreground">
-                      40-Cell Nursery Tray Emergence Matrix
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <h3 className="font-semibold text-base text-foreground">
+                        {cockpitTrayTab === "mud"
+                          ? "2D Mud Sampling & Emergence Map"
+                          : "40-Cell Nursery Tray Emergence Matrix"}
+                      </h3>
+                      <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] font-mono">
+                        420mm Fixed Gantry
+                      </Badge>
+                    </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Fixed 420mm overhead computer vision geometry tracks individual cell emergence kinetics.
+                      {cockpitTrayTab === "mud"
+                        ? "Interactive computer vision plane on nursery mud. Click any sown seed pin to annotate emergence kinetics."
+                        : "Fixed 420mm overhead computer vision geometry tracks individual cell emergence kinetics."}
                     </p>
                   </div>
-                  <div className="text-xs font-mono text-primary font-semibold">
-                    {cells.filter((c) => c.state === "GROWING").length}/40 Emerged (45%)
+
+                  <div className="flex items-center gap-2">
+                    {/* View Mode Toggle */}
+                    <div className="flex items-center p-1 bg-muted rounded-xl text-xs font-medium">
+                      <button
+                        onClick={() => setCockpitTrayTab("mud")}
+                        className={`px-3 py-1 rounded-lg transition-all ${
+                          cockpitTrayTab === "mud"
+                            ? "bg-background text-foreground shadow-xs font-semibold"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        2D Mud Map
+                      </button>
+                      <button
+                        onClick={() => setCockpitTrayTab("matrix")}
+                        className={`px-3 py-1 rounded-lg transition-all ${
+                          cockpitTrayTab === "matrix"
+                            ? "bg-background text-foreground shadow-xs font-semibold"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        Matrix Grid
+                      </button>
+                    </div>
+
+                    <div className="text-xs font-mono text-primary font-semibold px-2 py-1 bg-primary/10 rounded-lg">
+                      {cells.filter((c) => c.state === "GROWING" || c.state === "EMERGING").length}/{cells.length} Emerged (
+                      {Math.round(
+                        (cells.filter((c) => c.state === "GROWING" || c.state === "EMERGING").length /
+                          Math.max(1, cells.length)) *
+                          100
+                      )}
+                      %)
+                    </div>
                   </div>
                 </div>
 
-                {/* 40 cells grid (8 cols x 5 rows) */}
-                <div className="grid grid-cols-8 gap-2 p-3 rounded-xl bg-muted/40 border border-border">
-                  {cells.map((cell) => (
-                    <div
-                      key={cell.id}
-                      className={`h-10 rounded-lg border flex flex-col items-center justify-center text-[10px] font-mono transition-all ${
-                        cell.state === "GROWING"
-                          ? "bg-primary/20 border-primary text-primary font-bold shadow-xs"
-                          : cell.state === "EMERGING"
-                          ? "bg-amber-500/15 border-amber-500/40 text-amber-700"
-                          : "bg-background border-border text-muted-foreground"
-                      }`}
-                    >
-                      <span>{cell.id}</span>
-                      <span className="text-[8px]">
-                        {cell.state === "GROWING" ? "92%" : cell.state === "EMERGING" ? "45%" : "SOWN"}
+                {cockpitTrayTab === "mud" ? (
+                  /* Photographic 2D Mud Sampling Surface */
+                  <div className="relative aspect-[16/10] w-full rounded-2xl overflow-hidden border border-border shadow-inner bg-[#241A14] select-none">
+                    <img
+                      src={trayImageUrl || "/images/nursery_soil_tray.jpg"}
+                      alt="Mud Tray Observation"
+                      className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                    />
+                    <div className="absolute inset-0 bg-radial from-transparent via-transparent to-black/30 pointer-events-none" />
+
+                    {/* Sown Pins Overlay on Mud */}
+                    {(sownPins.length > 0 ? sownPins : (
+                      // Fallback 40 pins if none were explicitly sown
+                      Array.from({ length: 40 }, (_, i) => {
+                        const col = i % 8;
+                        const row = Math.floor(i / 8);
+                        return {
+                          id: `auto-${i + 1}`,
+                          cellId: `C${String(i + 1).padStart(2, "0")}`,
+                          x: Number((11 + col * 11.1).toFixed(1)),
+                          y: Number((15 + row * 17.5).toFixed(1)),
+                          state: cells[i]?.state || "SOWN",
+                        };
+                      })
+                    )).map((pin) => {
+                      const matchingCell = cells.find((c) => c.id === pin.cellId);
+                      const state = matchingCell?.state || pin.state;
+                      return (
+                        <div
+                          key={pin.id}
+                          onClick={() => handleTogglePinState(pin.id)}
+                          className="absolute -translate-x-1/2 -translate-y-1/2 z-20 cursor-pointer group"
+                          style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+                          title={`Cell ${pin.cellId}: ${state} (Click to toggle emergence state)`}
+                        >
+                          <div className="relative flex items-center justify-center">
+                            {state !== "SOWN" && (
+                              <span className="absolute w-8 h-8 rounded-full bg-emerald-500/30 animate-ping opacity-60" />
+                            )}
+                            <div
+                              className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-white shadow-md flex items-center justify-center text-xs transition-transform group-hover:scale-110 ${
+                                state === "GROWING"
+                                  ? "bg-emerald-600 text-white"
+                                  : state === "EMERGING"
+                                  ? "bg-amber-500 text-white"
+                                  : "bg-black/60 text-white/90"
+                              }`}
+                            >
+                              <span className="text-[11px] select-none">
+                                {state === "GROWING" ? "🍀" : state === "EMERGING" ? "🌿" : "🌱"}
+                              </span>
+                            </div>
+
+                            <div className="absolute -bottom-4 whitespace-nowrap px-1.5 py-0.2 bg-black/80 backdrop-blur-xs text-[9px] font-mono text-white rounded-md border border-white/20 shadow-xs pointer-events-none">
+                              {pin.cellId} · {state === "GROWING" ? "18mm" : state === "EMERGING" ? "6mm" : "Sown"}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Bottom HUD */}
+                    <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between px-3 py-1.5 rounded-xl bg-black/75 backdrop-blur-md text-[10px] sm:text-xs text-white/90 border border-white/10 pointer-events-none">
+                      <span className="font-mono">
+                        Overhead CV Plane: 420mm • ExG Hybrid Segmentation
+                      </span>
+                      <span className="text-emerald-400 font-semibold font-mono">
+                        ● Click pin to toggle emergence ground truth
                       </span>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  /* 40 cells grid (8 cols x 5 rows) */
+                  <div className="grid grid-cols-8 gap-2 p-3 rounded-xl bg-muted/40 border border-border">
+                    {cells.map((cell) => (
+                      <div
+                        key={cell.id}
+                        onClick={() => {
+                          const nextState =
+                            cell.state === "SOWN"
+                              ? "EMERGING"
+                              : cell.state === "EMERGING"
+                              ? "GROWING"
+                              : "SOWN";
+                          setCells((prev) =>
+                            prev.map((c) => (c.id === cell.id ? { ...c, state: nextState } : c))
+                          );
+                        }}
+                        className={`h-11 rounded-xl border flex flex-col items-center justify-center text-[10px] font-mono transition-all cursor-pointer hover:border-primary ${
+                          cell.state === "GROWING"
+                            ? "bg-primary/20 border-primary text-primary font-bold shadow-xs"
+                            : cell.state === "EMERGING"
+                            ? "bg-amber-500/15 border-amber-500/40 text-amber-700 font-medium"
+                            : "bg-background border-border text-muted-foreground"
+                        }`}
+                        title="Click to toggle emergence state"
+                      >
+                        <span>{cell.id}</span>
+                        <span className="text-[9px]">
+                          {cell.state === "GROWING" ? "92%" : cell.state === "EMERGING" ? "45%" : "SOWN"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Card>
 
             </motion.div>

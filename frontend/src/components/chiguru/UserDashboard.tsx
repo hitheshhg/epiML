@@ -156,7 +156,8 @@ export default function UserDashboard({
 }: UserDashboardProps) {
   const [filter, setFilter] = useState<"all" | "completed" | "running">("all");
   const [search, setSearch] = useState("");
-  const [histories, setHistories] = useState<UserExperimentHistory[]>(DEFAULT_HISTORIES);
+  // Start accurately at 0 experiments for the user
+  const [histories, setHistories] = useState<UserExperimentHistory[]>([]);
   const [profileDetails, setProfileDetails] = useState<{
     role: string;
     preferredCrop: string;
@@ -167,19 +168,22 @@ export default function UserDashboard({
 
   // Load user profile details and experiments from Supabase / localStorage
   useEffect(() => {
+    // 1. Check local storage cache
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("epiml_user_experiments");
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             setHistories(parsed);
           }
         } catch {}
       }
     }
 
+    // 2. Query Supabase profiles & experiments tables
     if (supabase && user?.id) {
+      // Profile query
       supabase
         .from("profiles")
         .select("role, preferred_crop")
@@ -193,10 +197,54 @@ export default function UserDashboard({
             });
           }
         });
+
+      // Experiments query
+      supabase
+        .from("experiments")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .then(({ data, error }) => {
+          if (!error && data && data.length > 0) {
+            const mapped: UserExperimentHistory[] = data.map((exp: any) => ({
+              id: exp.id,
+              cropName: exp.crop_name,
+              scientificName: exp.scientific_name || "Cultivar",
+              emoji: exp.emoji || "🌱",
+              status: (exp.status === "COMPLETED" ? "COMPLETED" : "RUNNING") as "COMPLETED" | "RUNNING",
+              startedAt: new Date(exp.created_at).toLocaleString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              completedAt: exp.completed_at
+                ? new Date(exp.completed_at).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : undefined,
+              durationDays: exp.duration_days || 1,
+              emergenceRatePct: Number(exp.emergence_rate_pct ?? 0),
+              cellsEmerged: exp.cells_emerged ?? 0,
+              totalCells: exp.total_cells ?? 40,
+              avgTemp: Number(exp.avg_temp ?? 24.5),
+              avgHumidity: Number(exp.avg_humidity ?? 75.0),
+              actuationsTotal: exp.actuations_total ?? 0,
+              currentEpochName: exp.current_epoch_name || "Epoch 1: Imbibition & Radicle Anchor",
+            }));
+            setHistories(mapped);
+            localStorage.setItem("epiml_user_experiments", JSON.stringify(mapped));
+          }
+        });
     }
   }, [user]);
 
-  // Computed metrics
+  // Accurately computed real metrics (starts at 0)
   const totalExperiments = histories.length;
   const completedExperiments = histories.filter((h) => h.status === "COMPLETED").length;
   const runningExperiments = histories.filter((h) => h.status === "RUNNING").length;
@@ -206,7 +254,28 @@ export default function UserDashboard({
           histories.reduce((acc, h) => acc + h.emergenceRatePct, 0) /
           histories.length
         ).toFixed(1)
-      : "95.0";
+      : "0.0";
+  const totalClosedLoopCycles = histories.reduce(
+    (acc, h) => acc + (h.actuationsTotal || 0),
+    0
+  );
+  const uniqueSpeciesCount = new Set(histories.map((h) => h.cropName)).size;
+
+  // Handler to reset all experiments to 0
+  const handleResetToZero = () => {
+    setHistories([]);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("epiml_user_experiments");
+    }
+  };
+
+  // Handler to load benchmark demo data
+  const handleLoadBenchmark = () => {
+    setHistories(DEFAULT_HISTORIES);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("epiml_user_experiments", JSON.stringify(DEFAULT_HISTORIES));
+    }
+  };
 
   // Filtered experiments
   const filteredHistories = histories.filter((item) => {
@@ -363,7 +432,7 @@ export default function UserDashboard({
             </div>
           </div>
           <div className="text-3xl font-light tracking-tight text-foreground font-mono">
-            655
+            {totalClosedLoopCycles}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             Irrigation pulses & vent sweeps
@@ -381,10 +450,12 @@ export default function UserDashboard({
             </div>
           </div>
           <div className="text-3xl font-light tracking-tight text-foreground font-mono">
-            5 Crops
+            {uniqueSpeciesCount} {uniqueSpeciesCount === 1 ? "Crop" : "Crops"}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Cereals, Legumes & Solanaceae
+          <p className="text-xs text-muted-foreground mt-1 truncate">
+            {uniqueSpeciesCount > 0
+              ? Array.from(new Set(histories.map((h) => h.cropName))).slice(0, 3).join(", ")
+              : "Awaiting first phenotyping trial"}
           </p>
         </Card>
 
@@ -398,9 +469,20 @@ export default function UserDashboard({
         {/* Header + Filter Bar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl sm:text-2xl font-light tracking-tight text-foreground">
-              Experiment History & Records
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl font-light tracking-tight text-foreground">
+                Experiment History & Records
+              </h2>
+              {histories.length > 0 && (
+                <button
+                  onClick={handleResetToZero}
+                  className="text-[11px] font-mono text-muted-foreground hover:text-rose-600 underline ml-2 transition-colors"
+                  title="Clear all records and reset dashboard to zero"
+                >
+                  Reset to 0
+                </button>
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-muted-foreground">
               All crop phenotyping trials, biological epochs, and deterministic telemetry logged under your account.
             </p>
@@ -452,16 +534,36 @@ export default function UserDashboard({
         {/* Experiment Records List */}
         <div className="grid grid-cols-1 gap-3.5">
           {filteredHistories.length === 0 ? (
-            <Card className="p-8 text-center text-muted-foreground rounded-2xl border-dashed">
-              <FlaskConical className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm font-medium">No experiment records found matching your query.</p>
-              <Button
-                onClick={onStartNewExperiment}
-                size="sm"
-                className="mt-4 rounded-xl bg-primary text-primary-foreground text-xs"
-              >
-                Start Your First Experiment
-              </Button>
+            <Card className="p-10 text-center text-muted-foreground rounded-2xl border-dashed bg-card/60">
+              <FlaskConical className="w-10 h-10 mx-auto mb-3 text-primary/40" />
+              <h3 className="text-sm font-semibold text-foreground mb-1">
+                {histories.length === 0 ? "No Experiment Records Yet" : "No matching experiments"}
+              </h3>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-5 leading-relaxed">
+                {histories.length === 0
+                  ? "Telemetry, closed-loop actuations, and photographic tray phenotyping data will dynamically populate here when you run experiments."
+                  : `No experiments found matching "${search}".`}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <Button
+                  onClick={onStartNewExperiment}
+                  size="sm"
+                  className="rounded-xl bg-primary text-primary-foreground text-xs h-9 px-5 font-semibold"
+                >
+                  <FlaskConical className="w-3.5 h-3.5 mr-1.5" />
+                  <span>Start First Experiment</span>
+                </Button>
+                {histories.length === 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLoadBenchmark}
+                    className="rounded-xl text-xs h-9 px-3.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <span>Load Benchmark Demo (5 Crops)</span>
+                  </Button>
+                )}
+              </div>
             </Card>
           ) : (
             filteredHistories.map((exp) => (
