@@ -547,15 +547,67 @@ void parseSerialCommands() {
           delay(800);
           updateLcd();
         }
-      } else if (cmdBuffer.equalsIgnoreCase("PUMP:ON") || cmdBuffer.equalsIgnoreCase("MOTOR:ON") || cmdBuffer.equalsIgnoreCase("ON") || cmdBuffer.equals("1")) {
+      } else if (cmdBuffer.equalsIgnoreCase("PUMP:ON") || cmdBuffer.equalsIgnoreCase("PUMP,ON") || cmdBuffer.equalsIgnoreCase("MOTOR:ON") || cmdBuffer.equalsIgnoreCase("ON") || cmdBuffer.equals("1")) {
         manual_pump_override = true;
         setPump(true, true);
         soundBeeps(1, 80);
         Serial.println(F(">> [MOTOR/RELAY] PUMP MOTOR FORCED ON (CLICK!)"));
-      } else if (cmdBuffer.equalsIgnoreCase("PUMP:OFF") || cmdBuffer.equalsIgnoreCase("MOTOR:OFF") || cmdBuffer.equalsIgnoreCase("OFF") || cmdBuffer.equals("0")) {
+      } else if (cmdBuffer.equalsIgnoreCase("PUMP:OFF") || cmdBuffer.equalsIgnoreCase("PUMP,OFF") || cmdBuffer.equalsIgnoreCase("MOTOR:OFF") || cmdBuffer.equalsIgnoreCase("OFF") || cmdBuffer.equals("0")) {
         manual_pump_override = false;
         setPump(false, true);
         Serial.println(F(">> [MOTOR/RELAY] PUMP MOTOR FORCED OFF (CLICK!)"));
+      } else if (cmdBuffer.startsWith("PROFILE,") || cmdBuffer.startsWith("PROFILE:")) {
+        // Format: PROFILE,<CROP>,<STAGE>,<MOIST_MIN>,<MOIST_MAX>,<TEMP_MIN>,<TEMP_MAX>,<SHADE_PCT>
+        // Example: PROFILE,TOMATO,GERMINATION,65,80,20,30,60
+        int comma1 = cmdBuffer.indexOf(',');
+        if (comma1 == -1) comma1 = cmdBuffer.indexOf(':');
+        
+        String rest = cmdBuffer.substring(comma1 + 1);
+        int comma2 = rest.indexOf(',');
+        int comma3 = (comma2 != -1) ? rest.indexOf(',', comma2 + 1) : -1;
+        int comma4 = (comma3 != -1) ? rest.indexOf(',', comma3 + 1) : -1;
+        int comma5 = (comma4 != -1) ? rest.indexOf(',', comma4 + 1) : -1;
+        int comma6 = (comma5 != -1) ? rest.indexOf(',', comma5 + 1) : -1;
+        int comma7 = (comma6 != -1) ? rest.indexOf(',', comma6 + 1) : -1;
+
+        String cropName = (comma2 != -1) ? rest.substring(0, comma2) : rest;
+        String stageName = (comma2 != -1 && comma3 != -1) ? rest.substring(comma2 + 1, comma3) : "STAGE";
+        
+        if (comma3 != -1 && comma4 != -1) {
+          int mMin = rest.substring(comma3 + 1, comma4).toInt();
+          int mMax = (comma5 != -1) ? rest.substring(comma4 + 1, comma5).toInt() : rest.substring(comma4 + 1).toInt();
+          if (mMin > 10 && mMin < 90) MOIST_PUMP_ON = mMin;
+          if (mMax > mMin && mMax < 99) MOIST_PUMP_OFF = mMax;
+        }
+
+        if (comma7 != -1) {
+          int shadePct = rest.substring(comma7 + 1).toInt();
+          int targetAngle = constrain((shadePct * 90) / 100, 0, 90);
+          updateCover(targetAngle);
+        }
+
+        // Visual and acoustic feedback
+        soundBeeps(2, 90);
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("CROP: " + cropName.substring(0, 10));
+        lcd.setCursor(0, 1);
+        lcd.print("STG: " + stageName.substring(0, 11));
+        delay(600);
+        updateLcd();
+
+        Serial.print(F("PROFILE_OK,"));
+        Serial.print(cropName);
+        Serial.print(F(","));
+        Serial.println(stageName);
+      } else if (cmdBuffer.startsWith("SHADE,") || cmdBuffer.startsWith("SHADE:")) {
+        int pct = cmdBuffer.substring(6).toInt();
+        int targetAngle = constrain((pct * 90) / 100, 0, 90);
+        updateCover(targetAngle);
+        Serial.print(F(">> [SHADE] TARGET SHADE "));
+        Serial.print(pct);
+        Serial.print(F("% -> SERVO "));
+        Serial.println(cover_angle);
       } else if (cmdBuffer.equalsIgnoreCase("FAN:ON")) {
         setFan(true);
         Serial.println(F(">> [FAN] AERATION FAN ON"));
@@ -585,7 +637,7 @@ void parseSerialCommands() {
       }
       cmdBuffer = "";
     } else {
-      if (cmdBuffer.length() < 30) {
+      if (cmdBuffer.length() < 70) {
         cmdBuffer += c;
       }
     }
