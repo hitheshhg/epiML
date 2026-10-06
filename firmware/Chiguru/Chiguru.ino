@@ -44,11 +44,11 @@
 #define SERVO1    5    // Vent servo
 #define SERVO2    6    // Cover servo
 
-// ==========================================
-// OBJECT INSTANTIATIONS
-// ==========================================
-DHT dht1(DHT1PIN, DHT22);
-DHT dht2(DHT2PIN, DHT22);
+// Set DHT type: DHT11 (Blue Module) or DHT22 (White Module)
+#define DHT_TYPE DHT11
+
+DHT dht1(DHT1PIN, DHT_TYPE);
+DHT dht2(DHT2PIN, DHT_TYPE);
 LiquidCrystal lcd(4, 7, 8, 9, 11, 12);
 Servo vent;
 Servo cover;
