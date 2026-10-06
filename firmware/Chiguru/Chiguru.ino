@@ -77,8 +77,9 @@ const unsigned long PUMP_COOLDOWN_MS = 30000UL;     // 30s forced cooldown
 const unsigned long BUZZER_TIMEOUT_MS = 10000UL;    // 10s auto-silence
 const unsigned long OVERWATER_LIMIT_MS = 60000UL;   // 60s saturation warning
 
-// Active-LOW relay configuration
-const bool RELAY_ACTIVE_LOW = true;
+// Active-LOW relay configuration (toggleable via INV serial command)
+bool RELAY_ACTIVE_LOW = true;
+bool manual_pump_override = false;
 
 // ==========================================
 // SYSTEM STATE VARIABLES
@@ -125,9 +126,9 @@ const unsigned long DEBOUNCE_DELAY_MS = 50;
 // HELPER FUNCTIONS & ACTUATOR DRIVERS
 // ==========================================
 
-void setPump(bool state) {
+void setPump(bool state, bool forceManual = false) {
   if (state && !pump_state) {
-    if (millis() - pump_stop_time < PUMP_COOLDOWN_MS && pump_stop_time != 0) {
+    if (!forceManual && millis() - pump_stop_time < PUMP_COOLDOWN_MS && pump_stop_time != 0) {
       return; // In cooldown
     }
     pump_start_time = millis();
@@ -263,7 +264,9 @@ void readAndValidateSensors() {
 // ==========================================
 
 void evaluateStorage() {
-  setPump(false);
+  if (!manual_pump_override) {
+    setPump(false);
+  }
   updateVent(0);
 
   bool temp_alert = (dht1_ok && T1 > STORAGE_TEMP_ALERT);
@@ -312,7 +315,7 @@ void evaluateGermination() {
 
   // 1. Critical Sensor Fault Check
   if (!m1_ok && !m2_ok) {
-    setPump(false);
+    if (!manual_pump_override) setPump(false);
     alert_state = true;
     snprintf(reason_str, sizeof(reason_str), "SENSOR FAULT ACT OF");
     return;
@@ -320,34 +323,36 @@ void evaluateGermination() {
 
   // 2. Overwatering Root-Rot Alert
   if (is_overwatered) {
-    setPump(false);
+    if (!manual_pump_override) setPump(false);
     snprintf(reason_str, sizeof(reason_str), "OVERWATER: NO PUMP");
     return;
   }
 
-  // 3. Irrigation Automation with Refusals
-  int activeM = m1_ok ? M1_idx : M2_idx;
-  if (activeM < MOIST_PUMP_ON) {
-    if (millis() - pump_stop_time < PUMP_COOLDOWN_MS && pump_stop_time != 0 && !pump_state) {
-      snprintf(reason_str, sizeof(reason_str), "PUMP REFUSE: CDWN");
-    } else {
-      setPump(true);
-      snprintf(reason_str, sizeof(reason_str), "PUMP ON WHY M1<35");
-    }
-  } else if (activeM >= MOIST_PUMP_OFF) {
-    setPump(false);
-    snprintf(reason_str, sizeof(reason_str), "PUMP OFF: M OK");
-  } else {
-    if (!pump_state) {
+  // 3. Irrigation Automation with Refusals (only if not manually overridden)
+  if (!manual_pump_override) {
+    int activeM = m1_ok ? M1_idx : M2_idx;
+    if (activeM < MOIST_PUMP_ON) {
+      if (millis() - pump_stop_time < PUMP_COOLDOWN_MS && pump_stop_time != 0 && !pump_state) {
+        snprintf(reason_str, sizeof(reason_str), "PUMP REFUSE: CDWN");
+      } else {
+        setPump(true);
+        snprintf(reason_str, sizeof(reason_str), "PUMP ON WHY M1<35");
+      }
+    } else if (activeM >= MOIST_PUMP_OFF) {
+      setPump(false);
       snprintf(reason_str, sizeof(reason_str), "PUMP OFF: M OK");
+    } else {
+      if (!pump_state) {
+        snprintf(reason_str, sizeof(reason_str), "PUMP OFF: M OK");
+      }
     }
-  }
 
-  // 4. Max continuous pump run safety cutoff
-  if (pump_state && (millis() - pump_start_time > MAX_PUMP_RUN_MS)) {
-    setPump(false);
-    alert_state = true;
-    snprintf(reason_str, sizeof(reason_str), "SAFETY TRIP: 60S");
+    // 4. Max continuous pump run safety cutoff
+    if (pump_state && (millis() - pump_start_time > MAX_PUMP_RUN_MS)) {
+      setPump(false);
+      alert_state = true;
+      snprintf(reason_str, sizeof(reason_str), "SAFETY TRIP: 60S");
+    }
   }
 
   // 5. Vent Proportional Control with "Know When Not To Act" Refusal
@@ -519,10 +524,19 @@ void parseSerialCommands() {
           delay(800);
           updateLcd();
         }
-      } else if (cmdBuffer.equals("PUMP:ON")) {
-        setPump(true);
-      } else if (cmdBuffer.equals("PUMP:OFF")) {
-        setPump(false);
+      } else if (cmdBuffer.equalsIgnoreCase("PUMP:ON") || cmdBuffer.equalsIgnoreCase("ON") || cmdBuffer.equals("1")) {
+        manual_pump_override = true;
+        setPump(true, true);
+        Serial.println(F(">> [RELAY] PUMP FORCED ON (CLICK!)"));
+      } else if (cmdBuffer.equalsIgnoreCase("PUMP:OFF") || cmdBuffer.equalsIgnoreCase("OFF") || cmdBuffer.equals("0")) {
+        manual_pump_override = false;
+        setPump(false, true);
+        Serial.println(F(">> [RELAY] PUMP FORCED OFF (CLICK!)"));
+      } else if (cmdBuffer.equalsIgnoreCase("INV")) {
+        RELAY_ACTIVE_LOW = !RELAY_ACTIVE_LOW;
+        digitalWrite(RELAY, pump_state ? (RELAY_ACTIVE_LOW ? LOW : HIGH) : (RELAY_ACTIVE_LOW ? HIGH : LOW));
+        Serial.print(F(">> [RELAY] POLARITY INVERTED! ACTIVE_LOW="));
+        Serial.println(RELAY_ACTIVE_LOW ? F("TRUE") : F("FALSE"));
       }
       cmdBuffer = "";
     } else {
