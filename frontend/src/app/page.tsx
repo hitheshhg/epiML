@@ -27,7 +27,10 @@ import {
   ExternalLink,
   ChevronLeft,
   X,
-  Loader2
+  Loader2,
+  FlaskConical,
+  User as UserIcon,
+  LayoutDashboard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +41,7 @@ import { DEFAULT_SEED_PROTOCOLS, generateCustomProtocol } from "@/lib/protocols"
 import { evaluateDeterministicControl } from "@/lib/control-engine";
 import { supabase } from "@/lib/supabase/client";
 import LoginModal from "@/components/chiguru/LoginModal";
+import UserDashboard from "@/components/chiguru/UserDashboard";
 
 // Clean GitHub Octocat SVG
 function GitHubIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -53,13 +57,14 @@ function GitHubIcon({ className = "w-4 h-4" }: { className?: string }) {
 }
 
 export default function HomePage() {
-  // Navigation / Experiment Step state
-  // "landing" = Main Landing Page (Image 1)
-  // "step-1" = What are you experimenting with? (Image 2)
+  // Navigation State
+  // "landing" = Main Landing Page
+  // "dashboard" = User Profile & Experiment Histories
+  // "step-1" = What are you experimenting with? (Seed selection)
   // "step-2" = AI Protocol Generation
   // "step-3" = Deterministic Hardware Link
-  // "step-4" = Live Laboratory Chamber Dashboard
-  const [viewState, setViewState] = useState<"landing" | "step-1" | "step-2" | "step-3" | "step-4">("landing");
+  // "step-4" = Live Laboratory Chamber Cockpit
+  const [viewState, setViewState] = useState<"landing" | "dashboard" | "step-1" | "step-2" | "step-3" | "step-4">("landing");
 
   // Authentication State
   const [user, setUser] = useState<{ id: string; email: string; name?: string } | null>(null);
@@ -159,12 +164,18 @@ export default function HomePage() {
     }
   }, []);
 
-  // Handle URL deep-link parameters (e.g. `/?step=1` coming back from /auth/login)
+  // Handle URL deep-link parameters (e.g. `/?view=dashboard` or `/?step=1`)
   useEffect(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("step") === "1") {
-        const cached = localStorage.getItem("chiguru_auth_user");
+      const cached = localStorage.getItem("chiguru_auth_user");
+      if (urlParams.get("view") === "dashboard") {
+        if (user || cached) {
+          setViewState("dashboard");
+        } else {
+          setIsAuthModalOpen(true);
+        }
+      } else if (urlParams.get("step") === "1") {
         if (user || cached) {
           setViewState("step-1");
         } else {
@@ -174,7 +185,7 @@ export default function HomePage() {
     }
   }, [user]);
 
-  // Auth Guard: Never allow viewing experiment steps 1-4 without an authenticated session
+  // Auth Guard: Never allow viewing dashboard or experiment steps 1-4 without an authenticated session
   useEffect(() => {
     if (viewState !== "landing" && !user) {
       const cached = typeof window !== "undefined" ? localStorage.getItem("chiguru_auth_user") : null;
@@ -193,6 +204,16 @@ export default function HomePage() {
       return;
     }
     setViewState("step-1");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleOpenDashboard = () => {
+    const cached = typeof window !== "undefined" ? localStorage.getItem("chiguru_auth_user") : null;
+    if (!user && !cached) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    setViewState("dashboard");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -312,7 +333,11 @@ export default function HomePage() {
           {/* Logo */}
           <button
             onClick={() => {
-              setViewState("landing");
+              if (user) {
+                setViewState("dashboard");
+              } else {
+                setViewState("landing");
+              }
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             className="flex items-center gap-2 hover:opacity-85 transition-opacity"
@@ -324,66 +349,91 @@ export default function HomePage() {
           </button>
 
           {/* Right Header Navigation */}
-          <div className="flex items-center gap-3">
-            {viewState === "landing" ? (
-              user ? (
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-muted-foreground hidden sm:inline-block">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {user ? (
+              <>
+                {/* 1. Dashboard Navigation Tab */}
+                <Button
+                  variant={viewState === "dashboard" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setViewState("dashboard");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`rounded-xl text-xs sm:text-sm h-9 px-3 font-medium transition-all ${
+                    viewState === "dashboard"
+                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5 mr-1.5" />
+                  <span>Dashboard</span>
+                </Button>
+
+                {/* 2. Experiment Section Navigation Tab */}
+                <Button
+                  variant={viewState.startsWith("step-") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setViewState("step-1");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`rounded-xl text-xs sm:text-sm h-9 px-3 font-medium transition-all ${
+                    viewState.startsWith("step-")
+                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <FlaskConical className="w-3.5 h-3.5 mr-1.5" />
+                  <span>Experiment Lab</span>
+                  {viewState.startsWith("step-") && (
+                    <span className="ml-1.5 text-[10px] font-mono opacity-80">
+                      ({viewState.replace("step-", "")}/4)
+                    </span>
+                  )}
+                </Button>
+
+                <div className="h-4 w-px bg-border mx-0.5 hidden sm:block" />
+
+                {/* Profile Pill */}
+                <div
+                  onClick={() => {
+                    setViewState("dashboard");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-muted/60 border border-border/80 text-xs cursor-pointer hover:bg-muted transition-colors"
+                  title="View Profile on Dashboard"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="font-mono text-foreground font-medium max-w-[120px] truncate">
                     {user.name || user.email.split("@")[0]}
                   </span>
-                  <Button
-                    onClick={() => {
-                      setViewState("step-1");
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                    size="sm"
-                    className="rounded-xl bg-primary text-primary-foreground font-medium text-xs sm:text-sm"
-                  >
-                    Lab Dashboard
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleSignOut}
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                    title="Sign Out"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                  </Button>
                 </div>
-              ) : (
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Link
-                    href="/auth/login"
-                    className="text-xs sm:text-sm text-foreground hover:text-primary transition-colors px-3 py-1.5 font-medium"
-                  >
-                    Sign In
-                  </Link>
-                  <Button
-                    onClick={handleStartExperiment}
-                    size="sm"
-                    className="rounded-xl bg-primary text-primary-foreground font-medium text-xs sm:text-sm h-9 px-4 hover:opacity-90 transition-all"
-                  >
-                    Get Started
-                  </Button>
-                </div>
-              )
-            ) : (
-              /* Step Counter in Experiment Mode */
-              <div className="flex items-center gap-3">
-                <span className="text-xs sm:text-sm text-muted-foreground font-mono font-medium">
-                  {viewState === "step-1" && "Step 1 of 4"}
-                  {viewState === "step-2" && "Step 2 of 4"}
-                  {viewState === "step-3" && "Step 3 of 4"}
-                  {viewState === "step-4" && "Step 4 of 4 · Live Lab"}
-                </span>
+
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  onClick={() => setViewState("landing")}
-                  className="rounded-xl text-xs h-8 px-2.5"
+                  onClick={handleSignOut}
+                  className="text-xs text-muted-foreground hover:text-foreground h-9 px-2 rounded-xl"
+                  title="Sign Out"
                 >
-                  Exit
+                  <LogOut className="w-3.5 h-3.5" />
+                </Button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Link
+                  href="/auth/login"
+                  className="text-xs sm:text-sm text-foreground hover:text-primary transition-colors px-3 py-1.5 font-medium"
+                >
+                  Sign In
+                </Link>
+                <Button
+                  onClick={handleStartExperiment}
+                  size="sm"
+                  className="rounded-xl bg-primary text-primary-foreground font-medium text-xs sm:text-sm h-9 px-4 hover:opacity-90 transition-all"
+                >
+                  Get Started
                 </Button>
               </div>
             )}
@@ -435,9 +485,22 @@ export default function HomePage() {
                   size="lg"
                   className="w-full sm:w-auto h-12 px-8 rounded-xl bg-primary text-primary-foreground font-semibold text-sm sm:text-base flex items-center justify-center gap-2 shadow-sm hover:opacity-90 active:scale-[0.98] transition-all"
                 >
+                  <FlaskConical className="w-4 h-4" />
                   <span>Start Experiment</span>
                   <ArrowRight className="w-4 h-4" />
                 </Button>
+
+                {user && (
+                  <Button
+                    onClick={handleOpenDashboard}
+                    variant="outline"
+                    size="lg"
+                    className="w-full sm:w-auto h-12 px-6 rounded-xl border border-border bg-card hover:bg-muted text-foreground font-medium text-sm sm:text-base flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                  >
+                    <LayoutDashboard className="w-4 h-4 text-primary" />
+                    <span>View Dashboard</span>
+                  </Button>
+                )}
 
                 <Button
                   asChild
@@ -524,7 +587,7 @@ export default function HomePage() {
                   ATmega328P · DHT22 · Capacitive Soil Moisture · Servo Vent · 5V Relay Pump
                 </div>
                 <div>
-                  CHIGURU v2.0 · Open Source Agronomy Lab
+                  epiML v2.0 · Open Source Agronomy Lab
                 </div>
               </div>
 
@@ -532,7 +595,38 @@ export default function HomePage() {
           )}
 
           {/* ===================================================================== */}
-          {/* VIEW 2: STEP 1 OF 4 — SEED SELECTION (EXACT REPLICA OF IMAGE 2) */}
+          {/* VIEW: RESEARCHER DASHBOARD & EXPERIMENT HISTORIES */}
+          {/* ===================================================================== */}
+          {viewState === "dashboard" && user && (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="flex-1 flex flex-col items-center justify-start w-full"
+            >
+              <UserDashboard
+                user={user}
+                onStartNewExperiment={() => {
+                  setViewState("step-1");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                onResumeActiveExperiment={() => {
+                  setViewState("step-4");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                onRerunProtocol={(proto) => {
+                  setSelectedProtocol(proto);
+                  setViewState("step-2");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              />
+            </motion.div>
+          )}
+
+          {/* ===================================================================== */}
+          {/* VIEW: STEP 1 OF 4 — SEED SELECTION (EXPERIMENT SECTION) */}
           {/* ===================================================================== */}
           {viewState === "step-1" && (
             <motion.div
@@ -543,6 +637,25 @@ export default function HomePage() {
               transition={{ duration: 0.4 }}
               className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 py-12 max-w-4xl mx-auto w-full"
             >
+              
+              {/* Breadcrumb Navigation: Return to Dashboard */}
+              <div className="w-full max-w-2xl flex items-center justify-between mb-6 pb-3 border-b border-border text-xs">
+                <button
+                  onClick={() => {
+                    setViewState("dashboard");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground font-medium transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Back to Dashboard</span>
+                </button>
+                <div className="flex items-center gap-2 font-mono text-muted-foreground">
+                  <span>Experiment Section</span>
+                  <span>•</span>
+                  <span className="text-primary font-semibold">Step 1 of 4</span>
+                </div>
+              </div>
               
               {/* Title Header */}
               <div className="text-center mb-8">
@@ -627,6 +740,37 @@ export default function HomePage() {
               transition={{ duration: 0.4 }}
               className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 py-12 max-w-4xl mx-auto w-full"
             >
+              
+              {/* Breadcrumb Navigation: Return to Dashboard or Step 1 */}
+              <div className="w-full flex items-center justify-between mb-6 pb-3 border-b border-border text-xs">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setViewState("dashboard");
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Dashboard</span>
+                  </button>
+                  <span className="text-border">/</span>
+                  <button
+                    onClick={() => {
+                      setViewState("step-1");
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="text-muted-foreground hover:text-foreground font-medium transition-colors"
+                  >
+                    Seed Selection
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 font-mono text-muted-foreground">
+                  <span>Experiment Section</span>
+                  <span>•</span>
+                  <span className="text-primary font-semibold">Step 2 of 4</span>
+                </div>
+              </div>
               
               <div className="text-center mb-8">
                 <Badge className="mb-3 px-3 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full text-xs font-medium">
@@ -754,6 +898,25 @@ export default function HomePage() {
               className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 py-12 max-w-4xl mx-auto w-full"
             >
               
+              {/* Breadcrumb Navigation: Return to Dashboard */}
+              <div className="w-full flex items-center justify-between mb-6 pb-3 border-b border-border text-xs">
+                <button
+                  onClick={() => {
+                    setViewState("dashboard");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground font-medium transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Back to Dashboard</span>
+                </button>
+                <div className="flex items-center gap-2 font-mono text-muted-foreground">
+                  <span>Experiment Section</span>
+                  <span>•</span>
+                  <span className="text-primary font-semibold">Step 3 of 4</span>
+                </div>
+              </div>
+              
               <div className="text-center mb-8">
                 <Badge className="mb-3 px-3 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full text-xs font-medium">
                   Deterministic Control Interface
@@ -873,6 +1036,25 @@ export default function HomePage() {
               className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 py-8 max-w-5xl mx-auto w-full space-y-6"
             >
               
+              {/* Breadcrumb Navigation: Return to Dashboard */}
+              <div className="w-full flex items-center justify-between pb-2 text-xs">
+                <button
+                  onClick={() => {
+                    setViewState("dashboard");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground font-medium transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Back to Dashboard</span>
+                </button>
+                <div className="flex items-center gap-2 font-mono text-muted-foreground">
+                  <span>Experiment Section</span>
+                  <span>•</span>
+                  <span className="text-primary font-semibold">Step 4 of 4 · Live Cockpit</span>
+                </div>
+              </div>
+
               {/* Cockpit Status Header */}
               <Card className="w-full border border-border bg-card p-6 rounded-2xl shadow-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -904,7 +1086,7 @@ export default function HomePage() {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement("a");
                         a.href = url;
-                        a.download = `chiguru_${selectedProtocol.id}_log.csv`;
+                        a.download = `epiml_${selectedProtocol.id}_log.csv`;
                         a.click();
                       }}
                       className="rounded-xl text-xs h-9 flex items-center gap-1.5"
@@ -1188,7 +1370,7 @@ export default function HomePage() {
         onSuccess={(authedUser) => {
           setUser(authedUser);
           setIsAuthModalOpen(false);
-          setViewState("step-1");
+          setViewState("dashboard");
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
       />

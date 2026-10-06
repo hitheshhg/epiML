@@ -80,6 +80,8 @@ function SignUpForm() {
           }
           if (redirectTarget === "step-1" || redirectTarget.includes("step=1")) {
             router.push("/?step=1");
+          } else if (redirectTarget === "/" || !redirectTarget) {
+            router.push("/?view=dashboard");
           } else {
             router.push(redirectTarget);
           }
@@ -105,6 +107,8 @@ function SignUpForm() {
         }
         if (redirectTarget === "step-1" || redirectTarget.includes("step=1")) {
           router.push("/?step=1");
+        } else if (redirectTarget === "/" || !redirectTarget) {
+          router.push("/?view=dashboard");
         } else {
           router.push(redirectTarget);
         }
