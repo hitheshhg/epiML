@@ -29,7 +29,14 @@ import {
   MonitoringSession,
 } from "@/lib/types/monitoring";
 import { ValidatedPlantProfile } from "@/schemas/plant";
-import { getLocalUser, ChiguruUser } from "@/lib/supabaseClient";
+import {
+  getLocalUser,
+  setLocalUser,
+  getCurrentUser,
+  signOutUser,
+  supabase,
+  ChiguruUser,
+} from "@/lib/supabaseClient";
 import { Language } from "@/lib/translations";
 import {
   Sprout,
@@ -109,13 +116,43 @@ export default function Home() {
   const serialPortRef = useRef<any>(null);
   const serialWriterRef = useRef<any>(null);
 
-  // Initialize auth user and language on mount
+  // Initialize auth user from Supabase or local storage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setUser(getLocalUser());
+      getCurrentUser().then((u) => {
+        if (u) setUser(u);
+      });
+
       const savedLang = localStorage.getItem("chiguru_lang") as Language;
       if (savedLang && ["en", "kn", "tu", "hi"].includes(savedLang)) {
         setLang(savedLang);
+      }
+
+      if (supabase) {
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (session?.user) {
+            const u = session.user;
+            const mapped: ChiguruUser = {
+              id: u.id,
+              email: u.email || "",
+              name:
+                (u.user_metadata?.full_name as string) ||
+                (u.user_metadata?.name as string) ||
+                u.email?.split("@")[0],
+              role: "researcher",
+            };
+            setLocalUser(mapped);
+            setUser(mapped);
+          } else if (event === "SIGNED_OUT") {
+            setUser(null);
+            setLocalUser(null);
+          }
+        });
+        return () => {
+          subscription.unsubscribe();
+        };
       }
     }
   }, []);
@@ -396,7 +433,10 @@ export default function Home() {
         onTabChange={(tab) => setActiveTab(tab)}
         user={user}
         onOpenAuth={() => setIsAuthOpen(true)}
-        onLogout={() => setUser(null)}
+        onLogout={async () => {
+          await signOutUser();
+          setUser(null);
+        }}
         isHardwareLive={telemetry.is_hardware_live}
         serialConnected={serialConnected}
         onOpenHardwareModal={() => setIsHardwareModalOpen(true)}

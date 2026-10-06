@@ -11,7 +11,11 @@ import {
   CheckCircle2,
   Box,
   Compass,
-  Wind
+  Wind,
+  Database,
+  ExternalLink,
+  Download,
+  AlertTriangle
 } from "lucide-react";
 
 interface TechnologyViewProps {
@@ -151,6 +155,152 @@ export default function TechnologyView({ lang }: TechnologyViewProps) {
             <span className="text-[#2D6A4F] font-bold block">Pin A5:</span>
             <span className="text-[#163828]">Fan Driver (2N2222 Transistor)</span>
           </div>
+        </div>
+      </div>
+
+      {/* 5. Supabase Cloud Architecture & PostgreSQL Schema (Section 30) */}
+      <div className="bg-white rounded-2xl border border-[#D5E0D0] p-6 sm:p-8 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[#E8EFE5]">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2D6A4F]" />
+              <h3 className="text-xl font-extrabold text-[#163828]">
+                Supabase PostgreSQL Cloud Architecture
+              </h3>
+              <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-[#EBF2E8] text-[#2D6A4F] border border-[#B7D1C5]">
+                REF: qbeqacmwaoufiwhafvyj
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-[#52796F] mt-1">
+              Persistent storage of plant profiles, 40-cell growth matrices, actuator telemetry, and verified research datasets.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <a
+              href="/api/database/schema"
+              download="chiguru_schema.sql"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FAFBF9] hover:bg-[#EBF2E8] text-[#2D6A4F] border border-[#D5E0D0] transition-all flex items-center gap-1.5 shadow-xs"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download SQL Schema</span>
+            </a>
+
+            <a
+              href="https://supabase.com/dashboard/project/qbeqacmwaoufiwhafvyj/sql"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#2D6A4F] hover:bg-[#1B4332] text-white transition-all flex items-center gap-1.5 shadow-sm"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Open Supabase SQL Editor</span>
+            </a>
+          </div>
+        </div>
+
+        {/* 10 Core Entities Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 text-xs">
+          <div className="p-3.5 rounded-xl bg-[#FAFBF9] border border-[#E2E8DC] space-y-1">
+            <div className="flex items-center justify-between font-mono font-bold text-[#163828]">
+              <span>public.profiles</span>
+              <span className="text-[10px] text-[#2D6A4F]">AUTH • RLS</span>
+            </div>
+            <p className="text-[#52796F] text-[11px]">
+              Researcher accounts linked directly to Supabase Auth (`auth.users`) with automatic trigger onboarding.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#FAFBF9] border border-[#E2E8DC] space-y-1">
+            <div className="flex items-center justify-between font-mono font-bold text-[#163828]">
+              <span>public.plant_profiles</span>
+              <span className="text-[10px] text-[#2D6A4F]">BOTANICAL</span>
+            </div>
+            <p className="text-[#52796F] text-[11px]">
+              Validated GBIF taxonomy, accepted scientific names, ISTA/FAO thermal sums, and moisture index targets.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#FAFBF9] border border-[#E2E8DC] space-y-1">
+            <div className="flex items-center justify-between font-mono font-bold text-[#163828]">
+              <span>public.monitoring_sessions</span>
+              <span className="text-[10px] text-[#2D6A4F]">IMMUTABLE</span>
+            </div>
+            <p className="text-[#52796F] text-[11px]">
+              Persistent session runs freezing the botanical profile snapshot, camera geometry, and algorithm version.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#FAFBF9] border border-[#E2E8DC] space-y-1">
+            <div className="flex items-center justify-between font-mono font-bold text-[#163828]">
+              <span>public.cells (C01 - C40)</span>
+              <span className="text-[10px] text-[#2D6A4F]">40-CELL TRAY</span>
+            </div>
+            <p className="text-[#52796F] text-[11px]">
+              Persistent identities for every cell in the 5×8 nursery tray, tracking emergence dates and green area mm².
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#FAFBF9] border border-[#E2E8DC] space-y-1">
+            <div className="flex items-center justify-between font-mono font-bold text-[#163828]">
+              <span>public.sensor_samples</span>
+              <span className="text-[10px] text-[#2D6A4F]">TIMESERIES</span>
+            </div>
+            <p className="text-[#52796F] text-[11px]">
+              High-frequency sensor telemetry tagged with provenance: MEASURED, DERIVED, SIMULATED, or REPLAY.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#FAFBF9] border border-[#E2E8DC] space-y-1">
+            <div className="flex items-center justify-between font-mono font-bold text-[#163828]">
+              <span>public.actuator_events</span>
+              <span className="text-[10px] text-[#2D6A4F]">AUDIT LOG</span>
+            </div>
+            <p className="text-[#52796F] text-[11px]">
+              Immutable audit history of irrigation pump runs (D13), vent servo degrees (D5), and chamber fan airflow (A5).
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#FAFBF9] border border-[#E2E8DC] space-y-1">
+            <div className="flex items-center justify-between font-mono font-bold text-[#163828]">
+              <span>public.phenotype_observations</span>
+              <span className="text-[10px] text-[#2D6A4F]">VISION</span>
+            </div>
+            <p className="text-[#52796F] text-[11px]">
+              Overhead crops, Excess Green (ExG) segmentations, bounding boxes, and cotyledon pixel expansions.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#FAFBF9] border border-[#E2E8DC] space-y-1">
+            <div className="flex items-center justify-between font-mono font-bold text-[#163828]">
+              <span>public.verified_dataset</span>
+              <span className="text-[10px] text-[#2D6A4F]">HITL LEARNING</span>
+            </div>
+            <p className="text-[#52796F] text-[11px]">
+              Human-in-the-loop validated ground truths (YES / NO / UNCERTAIN) forming versioned training sets.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#FAFBF9] border border-[#E2E8DC] space-y-1">
+            <div className="flex items-center justify-between font-mono font-bold text-[#163828]">
+              <span>public.models</span>
+              <span className="text-[10px] text-[#2D6A4F]">V0 • V1 • V2</span>
+            </div>
+            <p className="text-[#52796F] text-[11px]">
+              Model version tracking recording real Precision, Recall, F1, and IoU before deployment promotion.
+            </p>
+          </div>
+        </div>
+
+        {/* Quick Migration Instructions Box */}
+        <div className="p-4 rounded-xl bg-[#F4F7F2] border border-[#D5E0D0] text-xs text-[#163828] space-y-2">
+          <div className="font-bold flex items-center gap-1.5 text-[#2D6A4F]">
+            <span>1-Step Setup in Supabase Dashboard:</span>
+          </div>
+          <ol className="list-decimal list-inside space-y-1 text-[#52796F]">
+            <li>Open the Supabase SQL Editor: <a href="https://supabase.com/dashboard/project/qbeqacmwaoufiwhafvyj/sql" target="_blank" rel="noopener noreferrer" className="font-mono text-[#2D6A4F] underline">supabase.com/dashboard/project/qbeqacmwaoufiwhafvyj/sql</a></li>
+            <li>Click <strong>“New query”</strong> and paste the contents of <code className="bg-white px-1.5 py-0.5 rounded border border-[#D5E0D0]">supabase/migrations/20261007_chiguru_schema.sql</code> (or click <strong>Download SQL Schema</strong> above).</li>
+            <li>Click <strong>“Run”</strong> (or press Ctrl+Enter). All 10 tables, Row Level Security policies, indexes, and storage buckets will be provisioned in ~2 seconds.</li>
+          </ol>
         </div>
       </div>
 
