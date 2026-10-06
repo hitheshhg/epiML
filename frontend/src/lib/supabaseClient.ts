@@ -1,44 +1,42 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl.length > 5 && supabaseAnonKey.length > 5
+);
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
+// Create client if configured, otherwise null
+export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
 export interface ChiguruUser {
   id: string;
   email: string;
-  name: string;
-  institution?: string;
+  name?: string;
+  role: "researcher" | "evaluator" | "guest";
   isGuest?: boolean;
 }
 
-// Local mock session storage for offline / demonstration operation
-const GUEST_STORAGE_KEY = "chiguru_local_session";
-
+// Session store in localStorage for guest/evaluator demo mode
 export function getLocalUser(): ChiguruUser | null {
   if (typeof window === "undefined") return null;
-  const stored = localStorage.getItem(GUEST_STORAGE_KEY);
-  if (!stored) return null;
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return null;
+  const stored = localStorage.getItem("chiguru_auth_user");
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {}
   }
+  return null;
 }
 
 export function setLocalUser(user: ChiguruUser | null): void {
   if (typeof window === "undefined") return;
-  if (!user) {
-    localStorage.removeItem(GUEST_STORAGE_KEY);
+  if (user) {
+    localStorage.setItem("chiguru_auth_user", JSON.stringify(user));
   } else {
-    localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(user));
+    localStorage.removeItem("chiguru_auth_user");
   }
 }

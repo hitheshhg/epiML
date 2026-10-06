@@ -1,0 +1,14 @@
+{
+  "modelVersion": "V1",
+  "datasetVersion": "v1.0",
+  "evaluatedSamples": 3,
+  "metrics": {
+    "precision": 0.667,
+    "recall": 1.0,
+    "f1Score": 0.8,
+    "iou": 0.667,
+    "accuracy": 0.667
+  },
+  "status": "CANDIDATE",
+  "evaluatedAt": "2026-10-06T21:07:45.447915Z"
+}

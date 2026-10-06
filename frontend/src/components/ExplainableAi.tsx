@@ -97,7 +97,7 @@ export default function ExplainableAi({
             Explainable Cyber-Physical Systems (X-CPS)
           </span>
           <h3 className="text-xl font-bold text-[#163828]">
-            {(t as any).explainableAi || "Explainable Cyber-Physical Decision Engine"}
+            {t.explainableTitle}
           </h3>
           <p className="text-xs text-[#52796F] mt-0.5">
             Transparent causal reasoning engine: Measurement $\to$ Rationale $\to$ Action or Refusal

@@ -1,0 +1,50 @@
+[
+  {
+    "cellId": "C17",
+    "plant": "Tomato",
+    "scientificName": "Solanum lycopersicum L.",
+    "timestamp": "2026-10-06T18:00:00Z",
+    "modelPrediction": "GERMINATED",
+    "confidence": 0.88,
+    "humanLabel": "YES",
+    "verified": true,
+    "greenAreaMm2": 14.8,
+    "environment": {
+      "temp": 25.2,
+      "humidity": 76.5,
+      "moisture": 72.1
+    }
+  },
+  {
+    "cellId": "C08",
+    "plant": "Tomato",
+    "scientificName": "Solanum lycopersicum L.",
+    "timestamp": "2026-10-06T18:00:00Z",
+    "modelPrediction": "EMERGING",
+    "confidence": 0.72,
+    "humanLabel": "YES",
+    "verified": true,
+    "greenAreaMm2": 6.2,
+    "environment": {
+      "temp": 25.1,
+      "humidity": 76.8,
+      "moisture": 71.9
+    }
+  },
+  {
+    "cellId": "C23",
+    "plant": "Tomato",
+    "scientificName": "Solanum lycopersicum L.",
+    "timestamp": "2026-10-06T18:00:00Z",
+    "modelPrediction": "GERMINATED",
+    "confidence": 0.54,
+    "humanLabel": "NO",
+    "verified": true,
+    "greenAreaMm2": 1.1,
+    "environment": {
+      "temp": 25.2,
+      "humidity": 76.5,
+      "moisture": 72.0
+    }
+  }
+]
