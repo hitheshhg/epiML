@@ -1,5 +1,5 @@
 -- ==============================================================================
--- epiML — Supabase Auth, Auto-Confirm, Profiles & Experiments Schema
+-- epiML — Supabase Profiles, Experiments & Auth Setup
 -- Project URL: https://qbeqacmwaoufiwhafvyj.supabase.co
 -- Run this in your Supabase Dashboard -> SQL Editor -> New query -> Run
 -- ==============================================================================
@@ -8,31 +8,19 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- ==============================================================================
--- 2. AUTO-CONFIRM USER EMAILS (Fixes "Email not confirmed" error for instant signups)
--- ==============================================================================
-CREATE OR REPLACE FUNCTION public.auto_confirm_user_email()
-RETURNS trigger AS $$
-BEGIN
-  -- Automatically marks email as confirmed immediately upon registration
-  NEW.email_confirmed_at = COALESCE(NEW.email_confirmed_at, now());
-  NEW.confirmed_at = COALESCE(NEW.confirmed_at, now());
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
+-- 2. CLEAN UP ANY PREVIOUS EXPERIMENTAL TRIGGERS ON auth.users
 DROP TRIGGER IF EXISTS on_auth_user_auto_confirm ON auth.users;
-CREATE TRIGGER on_auth_user_auto_confirm
-  BEFORE INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.auto_confirm_user_email();
+DROP FUNCTION IF EXISTS public.auto_confirm_user_email();
 
--- Also confirm any previously registered unconfirmed users
+-- 3. CONFIRM ALL EXISTING REGISTERED USERS
+-- In Supabase PostgreSQL, `confirmed_at` is a GENERATED column calculated
+-- automatically from `email_confirmed_at`. Therefore, we ONLY update `email_confirmed_at`.
 UPDATE auth.users 
-SET email_confirmed_at = now(), confirmed_at = now() 
+SET email_confirmed_at = now() 
 WHERE email_confirmed_at IS NULL;
 
 -- ==============================================================================
--- 3. USER PROFILES TABLE (Linked to auth.users)
+-- 4. USER PROFILES TABLE (Linked to auth.users)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -69,7 +57,7 @@ CREATE POLICY "Users can update their own profile"
   WITH CHECK ((select auth.uid()) = id);
 
 -- ==============================================================================
--- 4. AUTOMATIC PROFILE ONBOARDING TRIGGER
+-- 5. AUTOMATIC PROFILE ONBOARDING TRIGGER
 -- Whenever a user signs up in auth.users, create their profile row automatically
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -106,7 +94,7 @@ FROM auth.users
 ON CONFLICT (id) DO NOTHING;
 
 -- ==============================================================================
--- 5. CROP EXPERIMENTS TABLE
+-- 6. CROP EXPERIMENTS TABLE
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.experiments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
