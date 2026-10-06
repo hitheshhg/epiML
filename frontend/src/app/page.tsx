@@ -107,6 +107,8 @@ export default function HomePage() {
   const [serialConnected, setSerialConnected] = useState(false);
   const serialPortRef = useRef<any>(null);
   const serialWriterRef = useRef<any>(null);
+  const telemetrySamplesRef = useRef<any[]>([]);
+  const experimentStartTimeRef = useRef<number>(Date.now());
 
   // 40-cell tray simulation
   const [cells, setCells] = useState<Array<{ id: string; state: "SOWN" | "EMERGING" | "GROWING" }>>(() =>
@@ -162,9 +164,55 @@ export default function HomePage() {
           } else if (event === "SIGNED_OUT") {
             setUser(null);
             localStorage.removeItem("chiguru_auth_user");
+            localStorage.removeItem("epiml_active_experiment");
+            setActiveExperiment(null);
             setViewState("landing");
           }
         });
+
+        // Scrub any legacy mock experiment IDs from cache
+        const storedExps = localStorage.getItem("epiml_user_experiments");
+        if (storedExps) {
+          try {
+            const parsed = JSON.parse(storedExps);
+            if (Array.isArray(parsed)) {
+              const scrubbed = parsed.filter(
+                (item: any) =>
+                  item &&
+                  item.id &&
+                  !item.id.includes("EXP-2026-WHT-011") &&
+                  !item.id.includes("EXP-2026-TOM-042") &&
+                  !item.id.includes("EXP-2026-RIC-019") &&
+                  !item.id.includes("EXP-2026-MAI-007") &&
+                  !item.id.includes("EXP-2026-MNG-003")
+              );
+              localStorage.setItem("epiml_user_experiments", JSON.stringify(scrubbed));
+            }
+          } catch {}
+        }
+
+        // Restore active running experiment if present
+        const activeStored = localStorage.getItem("epiml_active_experiment");
+        if (activeStored) {
+          try {
+            const parsed = JSON.parse(activeStored);
+            if (
+              parsed &&
+              parsed.status === "RUNNING" &&
+              !parsed.id?.includes("EXP-2026-WHT-011") &&
+              !parsed.id?.includes("EXP-2026-TOM-042")
+            ) {
+              setActiveExperiment(parsed);
+              if (parsed.sownPins && parsed.sownPins.length > 0) setSownPins(parsed.sownPins);
+              if (parsed.trayImageUrl) setTrayImageUrl(parsed.trayImageUrl);
+              if (parsed.telemetryHistory && parsed.telemetryHistory.length > 0) {
+                telemetrySamplesRef.current = parsed.telemetryHistory;
+              }
+            } else {
+              localStorage.removeItem("epiml_active_experiment");
+            }
+          } catch {}
+        }
 
         return () => {
           authListener?.subscription?.unsubscribe();
@@ -255,6 +303,28 @@ export default function HomePage() {
             fan: control.fanState,
             lastCommandReason: control.reason,
           });
+
+          if (control.pumpState === 1 || control.fanState === 1) {
+            setActuationsCounter((prev) => prev + 1);
+          }
+
+          // Accumulate telemetry samples for ML training dataset
+          telemetrySamplesRef.current.push({
+            sample_index: telemetrySamplesRef.current.length + 1,
+            timestamp: reading.timestamp,
+            temperature_c: reading.temperature,
+            humidity_rh_pct: reading.humidity,
+            soil_moisture_1: reading.soilMoisture1,
+            soil_moisture_2: reading.soilMoisture2,
+            soil_moisture_avg: Number(((reading.soilMoisture1 + reading.soilMoisture2) / 2).toFixed(1)),
+            gas_ppm: reading.gasPpm,
+            lux: reading.lux,
+            pump_state: control.pumpState,
+            vent_angle_deg: control.ventAngle,
+            fan_state: control.fanState,
+            control_action_reason: control.reason,
+            hardware_linked: reading.isLiveHardware,
+          });
         }
       } catch {}
     }, 1500);
@@ -339,52 +409,108 @@ export default function HomePage() {
   };
 
   const handleLaunchExperiment = async () => {
-    const expId = `EXP-${new Date().getFullYear()}-${selectedProtocol.commonName.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+    // Generate valid RFC4122 UUID for Postgres PRIMARY KEY
+    const expUuid =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            const v = c === "x" ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
+
+    const expCode = `EXP-${new Date().getFullYear()}-${selectedProtocol.commonName.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+    const nowIso = new Date().toISOString();
+    const formattedStartTime = new Date().toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    experimentStartTimeRef.current = Date.now();
+
+    // Initial telemetry sample
+    const initialSample = {
+      sample_index: 1,
+      timestamp: nowIso,
+      temperature_c: telemetry.temperature,
+      humidity_rh_pct: telemetry.humidity,
+      soil_moisture_1: telemetry.soilMoisture1,
+      soil_moisture_2: telemetry.soilMoisture2,
+      soil_moisture_avg: Number(((telemetry.soilMoisture1 + telemetry.soilMoisture2) / 2).toFixed(1)),
+      gas_ppm: telemetry.gasPpm,
+      lux: telemetry.lux,
+      pump_state: actuators.pump,
+      vent_angle_deg: actuators.ventAngle,
+      fan_state: actuators.fan,
+      control_action_reason: actuators.lastCommandReason,
+      hardware_linked: telemetry.isLiveHardware,
+    };
+    telemetrySamplesRef.current = [initialSample];
+
+    const initialPhenotype = [
+      {
+        timestamp: nowIso,
+        emerged_count: 0,
+        total_count: sownPins.length > 0 ? sownPins.length : 40,
+        emergence_pct: 0.0,
+        cell_states: cells,
+        sown_pins: sownPins,
+      },
+    ];
+
     const newExp = {
-      id: expId,
+      id: expUuid,
+      experimentCode: expCode,
       cropName: selectedProtocol.commonName,
       scientificName: selectedProtocol.scientificName,
       emoji: selectedProtocol.emoji,
       status: "RUNNING" as const,
-      startedAt: new Date().toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      startedAt: formattedStartTime,
       durationDays: 1,
+      durationSeconds: 0,
       emergenceRatePct: 0.0,
       cellsEmerged: 0,
       totalCells: sownPins.length > 0 ? sownPins.length : 40,
-      avgTemp: selectedProtocol.epochs[0]?.tempRange.optimal || 24.5,
-      avgHumidity: selectedProtocol.epochs[0]?.humidityRange.optimal || 75.0,
+      avgTemp: telemetry.temperature || selectedProtocol.epochs[0]?.tempRange.optimal || 24.5,
+      avgHumidity: telemetry.humidity || selectedProtocol.epochs[0]?.humidityRange.optimal || 75.0,
+      avgSoilMoisture: Number(((telemetry.soilMoisture1 + telemetry.soilMoisture2) / 2).toFixed(1)),
+      avgGasPpm: telemetry.gasPpm || 38.0,
       actuationsTotal: 0,
       currentEpochName: selectedProtocol.epochs[0]?.name || "Epoch 1: Imbibition & Radicle Anchor",
+      sownPins: sownPins,
+      trayImageUrl: trayImageUrl,
+      telemetryHistory: telemetrySamplesRef.current,
+      phenotypeHistory: initialPhenotype,
+      protocolSnapshot: selectedProtocol,
     };
 
     setActiveExperiment(newExp);
     setActuationsCounter(0);
 
-    // 1. Immediately store in localStorage so it appears in the dashboard
+    // 1. Immediately store in localStorage so it appears in the dashboard & active cache
     if (typeof window !== "undefined") {
       try {
+        localStorage.setItem("epiml_active_experiment", JSON.stringify(newExp));
         const stored = localStorage.getItem("epiml_user_experiments");
         const list = stored ? JSON.parse(stored) : [];
         localStorage.setItem(
           "epiml_user_experiments",
-          JSON.stringify([newExp, ...list.filter((x: any) => x.id !== expId)])
+          JSON.stringify([newExp, ...list.filter((x: any) => x.id !== expUuid)])
         );
       } catch {}
     }
 
-    // 2. Persist in Supabase experiments table
+    // 2. Persist in Supabase public.experiments table under user_id
     if (supabase && user?.id) {
       try {
         await supabase.from("experiments").insert([
           {
-            id: expId,
+            id: expUuid,
             user_id: user.id,
+            experiment_code: expCode,
             crop_name: newExp.cropName,
             scientific_name: newExp.scientificName,
             emoji: newExp.emoji,
@@ -392,14 +518,23 @@ export default function HomePage() {
             current_epoch_name: newExp.currentEpochName,
             current_day: 1,
             duration_days: 1,
+            duration_seconds: 0,
             target_temp: newExp.avgTemp,
             target_humidity: newExp.avgHumidity,
+            avg_temp: newExp.avgTemp,
+            avg_humidity: newExp.avgHumidity,
+            avg_soil_moisture: newExp.avgSoilMoisture,
+            avg_gas_ppm: newExp.avgGasPpm,
             emergence_rate_pct: 0.0,
             cells_emerged: 0,
             total_cells: newExp.totalCells,
             actuations_total: 0,
             sown_pins: sownPins,
             tray_image_url: trayImageUrl,
+            telemetry_history: telemetrySamplesRef.current,
+            phenotype_history: initialPhenotype,
+            protocol_snapshot: selectedProtocol,
+            started_at: nowIso,
           },
         ]);
       } catch (err) {
@@ -416,10 +551,51 @@ export default function HomePage() {
     const totalCount = cells.length > 0 ? cells.length : 40;
     const emergencePct = Number(((emergedCount / totalCount) * 100).toFixed(1));
     const targetId = activeExperiment?.id;
+    const samples = telemetrySamplesRef.current;
+    const durationSec = Math.max(1, Math.round((Date.now() - experimentStartTimeRef.current) / 1000));
+    const completedIso = new Date().toISOString();
+    const completedFormatted = new Date().toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    // Compute aggregate averages from all collected telemetry samples for ML training accuracy
+    const avgTemp =
+      samples.length > 0
+        ? Number((samples.reduce((acc, s) => acc + (s.temperature_c ?? 24.5), 0) / samples.length).toFixed(1))
+        : activeExperiment?.avgTemp || 24.5;
+    const avgHum =
+      samples.length > 0
+        ? Number((samples.reduce((acc, s) => acc + (s.humidity_rh_pct ?? 75.0), 0) / samples.length).toFixed(1))
+        : activeExperiment?.avgHumidity || 75.0;
+    const avgSoil =
+      samples.length > 0
+        ? Number((samples.reduce((acc, s) => acc + (s.soil_moisture_avg ?? 70.0), 0) / samples.length).toFixed(1))
+        : 70.0;
+    const avgGas =
+      samples.length > 0
+        ? Number((samples.reduce((acc, s) => acc + (s.gas_ppm ?? 38.0), 0) / samples.length).toFixed(1))
+        : 38.0;
+
+    const finalPhenotypeSnapshot = [
+      ...(activeExperiment?.phenotypeHistory || []),
+      {
+        timestamp: completedIso,
+        emerged_count: emergedCount,
+        total_count: totalCount,
+        emergence_pct: emergencePct,
+        cell_states: cells,
+        sown_pins: sownPins,
+      },
+    ];
 
     // 1. Update localStorage
     if (typeof window !== "undefined" && targetId) {
       try {
+        localStorage.removeItem("epiml_active_experiment");
         const stored = localStorage.getItem("epiml_user_experiments");
         const list = stored ? JSON.parse(stored) : [];
         const updated = list.map((item: any) => {
@@ -427,16 +603,17 @@ export default function HomePage() {
             return {
               ...item,
               status: "COMPLETED",
-              completedAt: new Date().toLocaleString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
+              completedAt: completedFormatted,
+              durationSeconds: durationSec,
               emergenceRatePct: emergencePct,
               cellsEmerged: emergedCount,
+              avgTemp: avgTemp,
+              avgHumidity: avgHum,
+              avgSoilMoisture: avgSoil,
+              avgGasPpm: avgGas,
               actuationsTotal: actuationsCounter,
+              telemetryHistory: samples,
+              phenotypeHistory: finalPhenotypeSnapshot,
             };
           }
           return item;
@@ -454,8 +631,16 @@ export default function HomePage() {
             status: "COMPLETED",
             emergence_rate_pct: emergencePct,
             cells_emerged: emergedCount,
+            avg_temp: avgTemp,
+            avg_humidity: avgHum,
+            avg_soil_moisture: avgSoil,
+            avg_gas_ppm: avgGas,
             actuations_total: actuationsCounter,
-            updated_at: new Date().toISOString(),
+            duration_seconds: durationSec,
+            telemetry_history: samples,
+            phenotype_history: finalPhenotypeSnapshot,
+            completed_at: completedIso,
+            updated_at: completedIso,
           })
           .eq("id", targetId);
       } catch (err) {
@@ -805,7 +990,21 @@ export default function HomePage() {
                   setViewState("step-1");
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
-                onResumeActiveExperiment={() => {
+                onResumeActiveExperiment={(runningExp) => {
+                  if (runningExp) {
+                    setActiveExperiment(runningExp);
+                    if (runningExp.sownPins && runningExp.sownPins.length > 0) {
+                      setSownPins(runningExp.sownPins);
+                    }
+                    if (runningExp.trayImageUrl) setTrayImageUrl(runningExp.trayImageUrl);
+                    if (runningExp.telemetryHistory && runningExp.telemetryHistory.length > 0) {
+                      telemetrySamplesRef.current = runningExp.telemetryHistory;
+                    }
+                    const matchedProto = DEFAULT_SEED_PROTOCOLS.find(
+                      (p) => p.commonName.toLowerCase() === runningExp.cropName.toLowerCase()
+                    );
+                    if (matchedProto) setSelectedProtocol(matchedProto);
+                  }
                   setViewState("step-4");
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}

@@ -22,6 +22,9 @@ import {
   Sparkles,
   ChevronRight,
   ExternalLink,
+  Download,
+  Trash2,
+  Database,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +36,7 @@ import { supabase } from "@/lib/supabase/client";
 
 export interface UserExperimentHistory {
   id: string;
+  experimentCode?: string;
   cropName: string;
   scientificName: string;
   emoji: string;
@@ -40,102 +44,22 @@ export interface UserExperimentHistory {
   startedAt: string;
   completedAt?: string;
   durationDays: number;
+  durationSeconds?: number;
   emergenceRatePct: number;
   cellsEmerged: number;
   totalCells: number;
   avgTemp: number;
   avgHumidity: number;
+  avgSoilMoisture?: number;
+  avgGasPpm?: number;
   actuationsTotal: number;
   currentEpochName: string;
+  sownPins?: any[];
+  trayImageUrl?: string;
+  telemetryHistory?: any[];
+  phenotypeHistory?: any[];
+  protocolSnapshot?: any;
 }
-
-// Curated default realistic experiment runs for the user
-const DEFAULT_HISTORIES: UserExperimentHistory[] = [
-  {
-    id: "EXP-2026-WHT-011",
-    cropName: "Wheat",
-    scientificName: "Triticum aestivum",
-    emoji: "🌾",
-    status: "RUNNING",
-    startedAt: "Oct 6, 2026 · 09:30 AM",
-    durationDays: 1,
-    emergenceRatePct: 45.0,
-    cellsEmerged: 18,
-    totalCells: 40,
-    avgTemp: 22.8,
-    avgHumidity: 68.4,
-    actuationsTotal: 26,
-    currentEpochName: "Epoch 2: Coleoptile Emergence",
-  },
-  {
-    id: "EXP-2026-TOM-042",
-    cropName: "Tomato",
-    scientificName: "Solanum lycopersicum",
-    emoji: "🍅",
-    status: "COMPLETED",
-    startedAt: "Oct 1, 2026 · 10:00 AM",
-    completedAt: "Oct 6, 2026 · 04:00 PM",
-    durationDays: 5,
-    emergenceRatePct: 95.0,
-    cellsEmerged: 38,
-    totalCells: 40,
-    avgTemp: 24.6,
-    avgHumidity: 76.2,
-    actuationsTotal: 180,
-    currentEpochName: "Epoch 3: True Leaf Unfolding",
-  },
-  {
-    id: "EXP-2026-RIC-019",
-    cropName: "Rice",
-    scientificName: "Oryza sativa",
-    emoji: "🍚",
-    status: "COMPLETED",
-    startedAt: "Sep 24, 2026 · 08:15 AM",
-    completedAt: "Sep 29, 2026 · 06:30 PM",
-    durationDays: 5,
-    emergenceRatePct: 92.5,
-    cellsEmerged: 37,
-    totalCells: 40,
-    avgTemp: 27.8,
-    avgHumidity: 82.0,
-    actuationsTotal: 222,
-    currentEpochName: "Epoch 3: Radicle Anchor",
-  },
-  {
-    id: "EXP-2026-MAI-007",
-    cropName: "Maize",
-    scientificName: "Zea mays",
-    emoji: "🌽",
-    status: "COMPLETED",
-    startedAt: "Sep 16, 2026 · 11:45 AM",
-    completedAt: "Sep 20, 2026 · 02:00 PM",
-    durationDays: 4,
-    emergenceRatePct: 97.5,
-    cellsEmerged: 39,
-    totalCells: 40,
-    avgTemp: 25.2,
-    avgHumidity: 71.4,
-    actuationsTotal: 143,
-    currentEpochName: "Epoch 3: Mesocotyl Elongation",
-  },
-  {
-    id: "EXP-2026-MNG-003",
-    cropName: "Moong Bean",
-    scientificName: "Vigna radiata",
-    emoji: "🌱",
-    status: "COMPLETED",
-    startedAt: "Sep 8, 2026 · 09:00 AM",
-    completedAt: "Sep 11, 2026 · 05:00 PM",
-    durationDays: 3,
-    emergenceRatePct: 100.0,
-    cellsEmerged: 40,
-    totalCells: 40,
-    avgTemp: 26.0,
-    avgHumidity: 74.5,
-    actuationsTotal: 84,
-    currentEpochName: "Epoch 3: Hypocotyl Arch Unfolding",
-  },
-];
 
 interface UserDashboardProps {
   user: {
@@ -144,7 +68,7 @@ interface UserDashboardProps {
     name?: string;
   };
   onStartNewExperiment: () => void;
-  onResumeActiveExperiment: () => void;
+  onResumeActiveExperiment: (exp?: UserExperimentHistory) => void;
   onRerunProtocol: (protocol: SeedProtocol) => void;
 }
 
@@ -156,7 +80,7 @@ export default function UserDashboard({
 }: UserDashboardProps) {
   const [filter, setFilter] = useState<"all" | "completed" | "running">("all");
   const [search, setSearch] = useState("");
-  // Start accurately at 0 experiments for the user
+  // Start accurately at 0 experiments for the user — completely clean
   const [histories, setHistories] = useState<UserExperimentHistory[]>([]);
   const [profileDetails, setProfileDetails] = useState<{
     role: string;
@@ -168,14 +92,26 @@ export default function UserDashboard({
 
   // Load user profile details and experiments from Supabase / localStorage
   useEffect(() => {
-    // 1. Check local storage cache
+    // 1. Check local storage cache and PURGE any legacy fake experiment records
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("epiml_user_experiments");
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
-            setHistories(parsed);
+            // Actively filter out all fake mock IDs
+            const realOnly = parsed.filter(
+              (item: any) =>
+                item &&
+                item.id &&
+                !item.id.includes("EXP-2026-WHT-011") &&
+                !item.id.includes("EXP-2026-TOM-042") &&
+                !item.id.includes("EXP-2026-RIC-019") &&
+                !item.id.includes("EXP-2026-MAI-007") &&
+                !item.id.includes("EXP-2026-MNG-003")
+            );
+            setHistories(realOnly);
+            localStorage.setItem("epiml_user_experiments", JSON.stringify(realOnly));
           }
         } catch {}
       }
@@ -198,27 +134,36 @@ export default function UserDashboard({
           }
         });
 
-      // Experiments query
+      // Real user experiments query
       supabase
         .from("experiments")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .then(({ data, error }) => {
-          if (!error && data && data.length > 0) {
+          if (!error && data) {
             const mapped: UserExperimentHistory[] = data.map((exp: any) => ({
               id: exp.id,
+              experimentCode: exp.experiment_code || exp.id,
               cropName: exp.crop_name,
               scientificName: exp.scientific_name || "Cultivar",
               emoji: exp.emoji || "🌱",
               status: (exp.status === "COMPLETED" ? "COMPLETED" : "RUNNING") as "COMPLETED" | "RUNNING",
-              startedAt: new Date(exp.created_at).toLocaleString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
+              startedAt: exp.started_at
+                ? new Date(exp.started_at).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : new Date(exp.created_at).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
               completedAt: exp.completed_at
                 ? new Date(exp.completed_at).toLocaleString("en-US", {
                     month: "short",
@@ -229,16 +174,26 @@ export default function UserDashboard({
                   })
                 : undefined,
               durationDays: exp.duration_days || 1,
+              durationSeconds: exp.duration_seconds || 0,
               emergenceRatePct: Number(exp.emergence_rate_pct ?? 0),
               cellsEmerged: exp.cells_emerged ?? 0,
               totalCells: exp.total_cells ?? 40,
               avgTemp: Number(exp.avg_temp ?? 24.5),
               avgHumidity: Number(exp.avg_humidity ?? 75.0),
+              avgSoilMoisture: Number(exp.avg_soil_moisture ?? 70.0),
+              avgGasPpm: Number(exp.avg_gas_ppm ?? 38.0),
               actuationsTotal: exp.actuations_total ?? 0,
               currentEpochName: exp.current_epoch_name || "Epoch 1: Imbibition & Radicle Anchor",
+              sownPins: exp.sown_pins || [],
+              trayImageUrl: exp.tray_image_url,
+              telemetryHistory: exp.telemetry_history || [],
+              phenotypeHistory: exp.phenotype_history || [],
+              protocolSnapshot: exp.protocol_snapshot || {},
             }));
             setHistories(mapped);
-            localStorage.setItem("epiml_user_experiments", JSON.stringify(mapped));
+            if (typeof window !== "undefined") {
+              localStorage.setItem("epiml_user_experiments", JSON.stringify(mapped));
+            }
           }
         });
     }
@@ -261,20 +216,113 @@ export default function UserDashboard({
   );
   const uniqueSpeciesCount = new Set(histories.map((h) => h.cropName)).size;
 
-  // Handler to reset all experiments to 0
-  const handleResetToZero = () => {
-    setHistories([]);
+  // Handler to delete an experiment completely from Supabase and local cache
+  const handleDeleteExperiment = async (id: string) => {
+    const next = histories.filter((h) => h.id !== id);
+    setHistories(next);
     if (typeof window !== "undefined") {
-      localStorage.removeItem("epiml_user_experiments");
+      localStorage.setItem("epiml_user_experiments", JSON.stringify(next));
+    }
+    if (supabase && user?.id) {
+      try {
+        await supabase.from("experiments").delete().eq("id", id);
+      } catch (err) {
+        console.warn("Error deleting experiment from Supabase:", err);
+      }
     }
   };
 
-  // Handler to load benchmark demo data
-  const handleLoadBenchmark = () => {
-    setHistories(DEFAULT_HISTORIES);
+  // Handler to reset all experiments to 0
+  const handleResetToZero = async () => {
+    setHistories([]);
     if (typeof window !== "undefined") {
-      localStorage.setItem("epiml_user_experiments", JSON.stringify(DEFAULT_HISTORIES));
+      localStorage.removeItem("epiml_user_experiments");
+      localStorage.removeItem("epiml_active_experiment");
     }
+    if (supabase && user?.id) {
+      try {
+        await supabase.from("experiments").delete().eq("user_id", user.id);
+      } catch (err) {
+        console.warn("Error resetting Supabase experiments:", err);
+      }
+    }
+  };
+
+  // Handler to export structured ML training dataset (JSON)
+  const handleExportMLJson = (exp: UserExperimentHistory) => {
+    const mlDataset = {
+      dataset_metadata: {
+        framework: "epiML v2.0 Plant Phenotyping & Closed-Loop Chamber Dataset",
+        exported_at: new Date().toISOString(),
+        user_id: user.id,
+        user_email: user.email,
+        experiment_id: exp.id,
+        experiment_code: exp.experimentCode || exp.id,
+        crop_variety: exp.cropName,
+        scientific_name: exp.scientificName,
+        status: exp.status,
+        started_at: exp.startedAt,
+        completed_at: exp.completedAt,
+        duration_days: exp.durationDays,
+        duration_seconds: exp.durationSeconds,
+      },
+      biological_setpoints: exp.protocolSnapshot || {},
+      sown_spatial_ground_truth: {
+        total_seeds_sown: exp.totalCells,
+        seeds_emerged: exp.cellsEmerged,
+        emergence_rate_pct: exp.emergenceRatePct,
+        coordinates_on_mud_tray: exp.sownPins || [],
+        phenotype_observations_timeseries: exp.phenotypeHistory || [],
+      },
+      environmental_telemetry_timeseries:
+        exp.telemetryHistory && exp.telemetryHistory.length > 0
+          ? exp.telemetryHistory
+          : [
+              {
+                sample_index: 0,
+                timestamp: exp.startedAt,
+                temperature_c: exp.avgTemp,
+                humidity_rh_pct: exp.avgHumidity,
+                soil_moisture_index: exp.avgSoilMoisture || 70.0,
+                gas_ppm: exp.avgGasPpm || 38.0,
+                actuations_closed_loop: exp.actuationsTotal,
+              },
+            ],
+    };
+
+    const blob = new Blob([JSON.stringify(mlDataset, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `epiml_ml_dataset_${exp.cropName.toLowerCase()}_${exp.id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Handler to export tabular CSV for ML analysis (Pandas / Scikit-learn)
+  const handleExportTabularCsv = (exp: UserExperimentHistory) => {
+    const headers =
+      "timestamp,experiment_id,crop_name,temperature_c,humidity_rh,soil_moisture,gas_ppm,actuations,cells_emerged,emergence_pct\n";
+    let rows = "";
+    if (exp.telemetryHistory && exp.telemetryHistory.length > 0) {
+      rows = exp.telemetryHistory
+        .map(
+          (s: any) =>
+            `${s.timestamp || exp.startedAt},${exp.id},${exp.cropName},${s.temp ?? s.temperature ?? exp.avgTemp},${s.humidity ?? exp.avgHumidity},${s.soil1 ?? s.soil_moisture ?? exp.avgSoilMoisture ?? 70},${s.gas_ppm ?? exp.avgGasPpm ?? 38},${s.pump_state ?? 0},${exp.cellsEmerged},${exp.emergenceRatePct}`
+        )
+        .join("\n");
+    } else {
+      rows = `${exp.startedAt},${exp.id},${exp.cropName},${exp.avgTemp},${exp.avgHumidity},${exp.avgSoilMoisture || 70},${exp.avgGasPpm || 38},${exp.actuationsTotal},${exp.cellsEmerged},${exp.emergenceRatePct}`;
+    }
+    const blob = new Blob([headers + rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `epiml_telemetry_${exp.cropName.toLowerCase()}_${exp.id}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Filtered experiments
@@ -358,7 +406,10 @@ export default function UserDashboard({
           <div className="flex flex-col sm:flex-row items-stretch md:items-center gap-3 w-full md:w-auto">
             {runningExperiments > 0 && (
               <Button
-                onClick={onResumeActiveExperiment}
+                onClick={() => {
+                  const runningOne = histories.find((h) => h.status === "RUNNING");
+                  onResumeActiveExperiment(runningOne);
+                }}
                 variant="outline"
                 className="h-11 px-5 rounded-xl border border-primary/30 text-primary hover:bg-primary/10 flex items-center justify-center gap-2 text-xs sm:text-sm font-medium"
               >
@@ -553,16 +604,6 @@ export default function UserDashboard({
                   <FlaskConical className="w-3.5 h-3.5 mr-1.5" />
                   <span>Start First Experiment</span>
                 </Button>
-                {histories.length === 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleLoadBenchmark}
-                    className="rounded-xl text-xs h-9 px-3.5 text-muted-foreground hover:text-foreground"
-                  >
-                    <span>Load Benchmark Demo (5 Crops)</span>
-                  </Button>
-                )}
               </div>
             </Card>
           ) : (
@@ -599,16 +640,23 @@ export default function UserDashboard({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground font-mono">
-                        <span>ID: {exp.id}</span>
+                        <span>ID: {exp.experimentCode || exp.id.slice(0, 16)}</span>
                         <span>•</span>
                         <span>{exp.startedAt}</span>
                         <span>•</span>
                         <span>{exp.durationDays} Days</span>
                       </div>
 
-                      <p className="text-xs text-foreground/80 font-medium">
-                        {exp.currentEpochName}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                        <span className="text-xs text-foreground/80 font-medium">
+                          {exp.currentEpochName}
+                        </span>
+                        <span className="text-muted-foreground text-xs">•</span>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                          <Database className="w-3 h-3" />
+                          <span>ML Ready ({exp.telemetryHistory?.length || 1} telemetry pts)</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -652,15 +700,39 @@ export default function UserDashboard({
                   </div>
 
                   {/* Right: Actions */}
-                  <div className="flex items-center gap-2 pt-2 lg:pt-0 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 shrink-0">
+                    {/* ML Dataset Download Button */}
+                    <Button
+                      onClick={() => handleExportMLJson(exp)}
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl border-border text-foreground hover:bg-muted text-xs h-9 px-2.5 flex items-center gap-1.5"
+                      title="Export structured ML training dataset (JSON)"
+                    >
+                      <Database className="w-3.5 h-3.5 text-primary" />
+                      <span className="hidden sm:inline">ML JSON</span>
+                    </Button>
+
+                    {/* Telemetry CSV Button */}
+                    <Button
+                      onClick={() => handleExportTabularCsv(exp)}
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl border-border text-foreground hover:bg-muted text-xs h-9 px-2 flex items-center gap-1"
+                      title="Export tabular telemetry CSV for Pandas"
+                    >
+                      <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="hidden sm:inline">CSV</span>
+                    </Button>
+
                     {exp.status === "RUNNING" ? (
                       <Button
-                        onClick={onResumeActiveExperiment}
+                        onClick={() => onResumeActiveExperiment(exp)}
                         size="sm"
-                        className="rounded-xl bg-primary text-primary-foreground text-xs h-9 px-4 font-semibold flex items-center gap-1.5 shadow-xs"
+                        className="rounded-xl bg-primary text-primary-foreground text-xs h-9 px-3.5 font-semibold flex items-center gap-1.5 shadow-xs"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Open Cockpit</span>
+                        <span>Cockpit</span>
                       </Button>
                     ) : (
                       <Button
@@ -673,12 +745,24 @@ export default function UserDashboard({
                         }}
                         variant="outline"
                         size="sm"
-                        className="rounded-xl border-border text-foreground hover:bg-muted text-xs h-9 px-3.5 flex items-center gap-1.5"
+                        className="rounded-xl border-border text-foreground hover:bg-muted text-xs h-9 px-3 flex items-center gap-1.5"
+                        title="Rerun biological protocol"
                       >
                         <RotateCcw className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span>Rerun Protocol</span>
+                        <span>Rerun</span>
                       </Button>
                     )}
+
+                    {/* Delete button */}
+                    <Button
+                      onClick={() => handleDeleteExperiment(exp.id)}
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-xl text-xs h-9 px-2 text-muted-foreground hover:text-rose-600 hover:bg-rose-50"
+                      title="Delete experiment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
 
                 </div>
