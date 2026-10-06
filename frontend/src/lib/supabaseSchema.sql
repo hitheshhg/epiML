@@ -1,6 +1,6 @@
 -- ==============================================================================
--- CHIGURU 2.0 (ಚಿಗುರು) — Complete Database Schema & Migrations
--- TerraByte · YEN NOVA 1.0
+-- epiML — AI Crop Experiment Lab
+-- Autonomous Agricultural Experiment & Phenotyping Platform
 -- Built for: Supabase PostgreSQL + Auth + Storage
 -- Project Ref: qbeqacmwaoufiwhafvyj
 -- ==============================================================================
@@ -8,6 +8,28 @@
 -- 1. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- ==============================================================================
+-- 1.1 AUTO-CONFIRM USER EMAILS (Fixes "Email not confirmed" error for instant signups)
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION public.auto_confirm_user_email()
+RETURNS trigger AS $$
+BEGIN
+  NEW.email_confirmed_at = COALESCE(NEW.email_confirmed_at, now());
+  NEW.confirmed_at = COALESCE(NEW.confirmed_at, now());
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_auto_confirm ON auth.users;
+CREATE TRIGGER on_auth_user_auto_confirm
+  BEFORE INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.auto_confirm_user_email();
+
+-- Also confirm any previously registered unconfirmed users
+UPDATE auth.users 
+SET email_confirmed_at = now(), confirmed_at = now() 
+WHERE email_confirmed_at IS NULL;
 
 -- ==============================================================================
 -- 2. USER PROFILES TABLE (Linked to auth.users)

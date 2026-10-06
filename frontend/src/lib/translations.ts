@@ -239,7 +239,7 @@ export const translations: Record<Language, TranslationDict> = {
     trendSubtitle: "Synchronized rolling data buffer recorded at 1 Hz from Arduino Uno",
     liveWindow: "Past 30 Data Samples (Live Window)",
 
-    institution: "Yenepoya Institute of Technology, Moodbidri",
+    institution: "CHIGURU Autonomous Seed Systems",
     ieeePaper: "IEEE Paper & Patent Ready",
   },
 

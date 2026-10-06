@@ -9,8 +9,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Chiguru • ಚಿಗುರು | Autonomous Smart Agri-CPS",
-  description: "Next-Generation Autonomous Agri-Cyber-Physical System & Real-Time Seed Phenotyping Dashboard by Team TerraByte",
+  title: "epiML — AI Crop Experiment Lab",
+  description:
+    "One Arduino. Three biological epochs. AI-designed protocols. Deterministic control. Scientist-grade evidence.",
 };
 
 export default function RootLayout({
@@ -23,7 +24,7 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" sizes="any" />
       </head>
-      <body className="min-h-screen bg-[#F8FAF6] text-[#1E3A2B] selection:bg-[#52B788]/20 selection:text-[#163828]">
+      <body className="min-h-screen bg-background text-foreground selection:bg-primary/20 selection:text-primary">
         {children}
       </body>
     </html>

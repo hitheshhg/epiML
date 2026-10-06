@@ -207,8 +207,8 @@ export async function signUpWithEmail(
  */
 export function loginAsGuestOrEvaluator(
   role: "evaluator" | "guest" = "evaluator",
-  name: string = "Dr. Evaluator (YEN NOVA)",
-  email: string = "evaluator@chiguru.org"
+  name: string = "Dr. Alex Morgan (Guest Researcher)",
+  email: string = "demo@chiguru.ai"
 ): ChiguruUser {
   const guestUser: ChiguruUser = {
     id: "evaluator-session-01",

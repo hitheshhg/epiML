@@ -1,6 +1,6 @@
 -- ==============================================================================
--- CHIGURU 2.0 (ಚಿಗುರು) — Complete Database Schema & Migrations
--- TerraByte · YEN NOVA 1.0
+-- CHIGURU — AI Crop Experiment Lab
+-- Autonomous Agricultural Experiment & Phenotyping Platform
 -- Built for: Supabase PostgreSQL + Auth + Storage
 -- Project Ref: qbeqacmwaoufiwhafvyj
 -- ==============================================================================

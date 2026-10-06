@@ -1,8 +1,7 @@
-# 🌱 Chiguru (ಚಿಗುರು) — Complete Agri-Lifecycle Monitoring System
+# 🌱 epiML — AI Crop Experiment Lab
 
-> **"One device. Three crop stages. It tells you why."**  
-> **"Everyone here monitors the soil. We monitor the seed."**  
-> *"ಇಲ್ಲಿ ಪ್ರತಿಯೊಬ್ಬರೂ ಮಣ್ಣನ್ನು ಮಾತ್ರ ಪರೀಕ್ಷಿಸುತ್ತಾರೆ... ಆದರೆ ನಾವು ಬೀಜದ ಜೀವಂತಿಕೆಯನ್ನು ಪರೀಕ್ಷಿಸುತ್ತೇವೆ."*
+> **"One Arduino. Three biological epochs. AI-designed protocols. Deterministic control. Scientist-grade evidence."**  
+> Autonomous Agricultural Experimentation & Nursery Control Platform
 
 ---
 
