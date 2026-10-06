@@ -1,23 +1,24 @@
-# 🌱 Chiguru (ಚಿಗುರು) — Complete Agri-Lifecycle Monitoring System
+# 🌱 CHIGURU 2.0 (ಚಿಗುರು) — Intelligent Seed & Seedling Research Platform
 
-> **"One device. Three crop stages. It tells you why."**  
-> **"Everyone here monitors the soil. We monitor the seed."**  
-> *"ಇಲ್ಲಿ ಪ್ರತಿಯೊಬ್ಬರೂ ಮಣ್ಣನ್ನು ಮಾತ್ರ ಪರೀಕ್ಷಿಸುತ್ತಾರೆ... ಆದರೆ ನಾವು ಬೀಜದ ಜೀವಂತಿಕೆಯನ್ನು ಪರೀಕ್ಷಿಸುತ್ತೇವೆ."*
+> **"Chiguru transforms a standard nursery seedling tray into a programmable, continuously monitored biological experiment."**  
+> **"The hardware creates controlled conditions. The software measures how individual seedlings respond."**  
+> *"Technical Definition: A low-cost cyber-physical platform for programmable nursery experiments, continuous environmental sensing, automated seedling phenotyping, treatment comparison, and cell-level biological data acquisition."*
 
 ---
 
-### Project Overview
+### Project Identity & Research Objective
 * **Event:** YEN NOVA 1.0 (Yenepoya Institute of Technology, Dept. of ECE, Moodbidri, Mangalore)
 * **Team:** **TerraByte**
   - **Pavan HP** (Lead — Firmware, Integration, Judging Demo)
   - **Hithesh HG** (Hardware Wiring, Power Decoupling, Enclosure)
-  - **Vikas KH** (Laptop Software: Dashboard, Serial Bridge, Phone Camera CV)
-  - **Karthik V** (Documentation, Farmer Survey, Regional Language, Pitch & IEEE Paper)
-* **Official Problem Statement:**  
-  *"Design a single Arduino-based Agri-monitoring unit that ensures healthy seed germination through real-time environment tracking, automates field irrigation based on soil moisture, and prevents post-harvest grain spoilage through storage condition monitoring addressing pre-sowing, active growth, and post-harvest stages of a crop's lifecycle within one device."*
-* **Crop Strategy:**
-  - **Live Demo Crop:** Moong / Green Gram (*Vigna radiata*) — 24–48h fast emergence for live stage verification.
-  - **Research Target Crop:** Maize (*Zea mays*) — documented thermal emergence models and discrete countable seeds for IEEE manuscript.
+  - **Vikas KH** (Software Architecture, Phenotyping Pipeline, Analytics)
+  - **Karthik V** (Research Documentation, References, Regional Localization, Evaluation)
+* **Core Research Pipeline:**
+  $$\text{EXPERIMENT} \to \text{TREATMENT} \to \text{CONTROLLED MICRO-ENVIRONMENT} \to \text{CONTINUOUS SENSING} \to \text{TIME-LAPSE IMAGING} \to \text{CELL-LEVEL PHENOTYPING} \to \text{DATA FUSION} \to \text{ANALYTICS} \to \text{DATASET EXPORT}$$
+* **Primary Scientific Use Cases:**
+  - University agricultural research & teaching laboratories
+  - Commercial seed certification & lot-vigor quality assurance
+  - Controlled-environment horticultural phenotyping trials
 
 ---
 
