@@ -1,1 +1,1 @@
-PUMP:ON
+MODE:1
