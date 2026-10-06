@@ -1,9 +1,39 @@
 # Chiguru (ಚಿಗುರು) — Frozen Architecture Specification (Phase 0)
 
 **Project:** Chiguru — Single Arduino-Based Full-Lifecycle Agri-Monitoring System  
+**Tagline:** *"One device. Three crop stages. It tells you why."*  
 **Event:** YEN NOVA 1.0 (Yenepoya Institute of Technology, Moodbidri)  
 **Team:** TerraByte (Pavan HP, Hithesh HG, Vikas KH, Karthik V)  
 **Status:** ARCHITECTURE FROZEN — NO AMBIGUITY SURVIVES  
+
+---
+
+## 0. Dual Crop Strategy & Validation Model
+
+* **Live Demo Crop: Moong / Green Gram (*Vigna radiata*):**
+  - **Purpose:** 24–48 hour rapid emergence cycle for live stage judging demonstration.
+  - **Action:** Trays pre-sown 24 hours prior; visible cotyledons and sprouts guaranteed for the camera CV module on judging day.
+* **Research & Paper Target Crop: Maize (*Zea mays*):**
+  - **Purpose:** Rigorous IEEE paper and patent validation.
+  - **Characteristics:** Discrete countable seeds, well-documented base temperature threshold ($10^\circ\text{C}$), strict seed bank moisture respiration curves, and commercially critical crop in Karnataka.
+
+---
+
+## 0.1. Explainable Cyber-Physical Decision Engine (X-CPS)
+
+The core architectural innovation distinguishing Chiguru from hobbyist threshold switches is **Explainable Decisions and Refusal Autonomy**:
+> *The system must display measurement $\to$ reason $\to$ action, including "know when not to act" refusals.*
+
+| Subsystem / Actuator | State | Physical Trigger Condition | LCD Explainable Reason String | Causal Justification |
+| :--- | :---: | :--- | :--- | :--- |
+| **Storage Fan** | **ACT** | $\text{Humidity}_1 > 60\%$ | `FAN ON: HUM>60%` | Aeration prevents moisture stagnation and mold spores. |
+| **Storage Fan** | **REFUSE**| $\text{Humidity}_1 \le 60\%$ | `AIR OK: FAN OFF` | Quiescent air preserves seed grain equilibrium moisture. |
+| **Nursery Pump** | **ACT** | $\text{Moisture} < 35\%$ | `PUMP ON: M1<35%` | Replenish sub-surface root zone hydration. |
+| **Nursery Pump** | **REFUSE**| In 30s forced thermal cooldown | `PUMP BLK: COOLDWN` | Prevent motor driver overheating and soil waterlogging. |
+| **Nursery Pump** | **REFUSE**| Soil probe disconnected ($>1000$ raw) | `FAULT: SENS ACT OF` | Fail-safe: broken wire must never flood seed tray. |
+| **Ventilation Servo**| **ACT** | $\text{Temp}_2 > 32^\circ\text{C}$ & outside drier | `VENT ON: T2>32C` | Proportional thermal relief for emergent shoots. |
+| **Ventilation Servo**| **REFUSE**| Outside air is humid ($\text{Hum}_1 > \text{Hum}_2 + 8\%$) | `VENT BLK: AMB DAMP` | **High Innovation:** Opening vent would suck wet air in and induce fungal rot! |
+| **Field Fan** | **ACT** | Canopy $\text{Temp}_2 > 33^\circ\text{C}$ | `FAN ON: T2>33C` | Mitigate transpiration shutdown and heat stress. |
 
 ---
 

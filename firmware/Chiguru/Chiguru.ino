@@ -1,615 +1,672 @@
 /*
- * Chiguru (ಚಿಗುರು) — Full Lifecycle Agri-Monitoring System Firmware
+ * Chiguru (ಚಿಗುರು) — Complete Multi-Epoch Agri-Lifecycle Firmware
  * Event: YEN NOVA 1.0, Yenepoya Institute of Technology
  * Team: TerraByte (Pavan HP, Hithesh HG, Vikas KH, Karthik V)
  * 
- * Hardware Mapping (Arduino Uno):
- *   D2:  DHT22 #1 (Storage)
- *   D3:  DHT22 #2 (Germination / Field)
+ * Hardware Pin Mapping (Arduino Uno - 100% Pin Allocation):
+ *   D2:  DHT22 #1 data (storage zone)
+ *   D3:  DHT22 #2 data (germination zone)
  *   D4:  LCD RS
- *   D5:  Vent Servo (PWM)
- *   D6:  Cover Servo (PWM)
+ *   D5:  Servo #1 vent (PWM)
+ *   D6:  Servo #2 cover (PWM)
  *   D7:  LCD EN
  *   D8:  LCD D4
  *   D9:  LCD D5
- *   D10: Mode Button (INPUT_PULLUP, debounced)
+ *   D10: Mode button -> GND (INPUT_PULLUP)
  *   D11: LCD D6
  *   D12: LCD D7
- *   D13: Relay -> Water Pump (Onboard LED mirrors state)
- *   A0:  Soil Moisture Sensor #1 (Analog)
- *   A1:  Soil Moisture Sensor #2 (Analog)
- *   A2:  MQ-135 Gas Sensor (Analog)
- *   A3:  Piezo Buzzer
- *   A4:  Status Alert LED
- *   A5:  DC Aeration Fan (Transistor 2N2222 base)
+ *   D13: Relay IN (water pump)
+ *   A0:  Soil Moisture #1 (Analog)
+ *   A1:  Soil Moisture #2 (Analog)
+ *   A2:  MQ135 Gas Sensor (Analog)
+ *   A3:  Active Buzzer
+ *   A4:  Status LED (+ current limiting resistor)
+ *   A5:  DC Aeration Fan (via 2N2222 transistor)
  */
 
+#include <DHT.h>
 #include <LiquidCrystal.h>
 #include <Servo.h>
-#include <DHT.h>
 
 // ==========================================
-// PIN DEFINITIONS
+// PIN ASSIGNMENTS (FROZEN HARDWARE PINOUT)
 // ==========================================
-#define PIN_DHT_STORAGE     2
-#define PIN_DHT_GERM        3
-#define PIN_LCD_RS          4
-#define PIN_SERVO_VENT      5
-#define PIN_SERVO_COVER     6
-#define PIN_LCD_EN          7
-#define PIN_LCD_D4          8
-#define PIN_LCD_D5          9
-#define PIN_BUTTON_MODE     10
-#define PIN_LCD_D6          11
-#define PIN_LCD_D7          12
-#define PIN_RELAY_PUMP      13
-
-#define PIN_SOIL_1          A0
-#define PIN_SOIL_2          A1
-#define PIN_MQ135           A2
-#define PIN_BUZZER          A3
-#define PIN_STATUS_LED      A4
-#define PIN_FAN             A5
+#define DHT1PIN   2    // Storage zone
+#define DHT2PIN   3    // Germination zone
+#define M1        A0   // Moisture tray 1
+#define M2        A1   // Moisture tray 2
+#define GAS       A2   // MQ135
+#define BUZZ      A3   // Buzzer
+#define SLED      A4   // Status LED
+#define FAN       A5   // DC Fan via 2N2222
+#define BTN       10   // Mode button -> GND
+#define RELAY     13   // Pump relay (Active-LOW verified)
+#define SERVO1    5    // Vent servo
+#define SERVO2    6    // Cover servo
 
 // ==========================================
-// CALIBRATION & TUNING CONSTANTS
+// OBJECT INSTANTIATIONS
 // ==========================================
-// Soil Moisture ADC Raw Bounds (Tune during calibration)
-const int SOIL_RAW_DRY = 820;    // Open-air dry probe reading
-const int SOIL_RAW_WET = 290;    // Water-saturated probe reading
-const int SOIL_DISCONNECT_MIN = 50;   // Raw ADC below this = short/error
-const int SOIL_DISCONNECT_MAX = 1000; // Raw ADC above this = disconnected
-
-// Thresholds
-const float STORAGE_TEMP_ALERT = 30.0;     // deg C
-const float STORAGE_HUMID_ALERT = 65.0;    // % RH
-const float STORAGE_FAN_HUMID = 60.0;      // % RH to trigger aeration fan
-const float GERM_TEMP_VENT = 32.0;         // deg C threshold to begin opening vent
-const float FIELD_TEMP_FAN = 33.0;         // deg C canopy threshold for cooling fan
-
-const int MOISTURE_PUMP_ON_THRESH = 35;    // % moisture to start irrigation
-const int MOISTURE_PUMP_OFF_THRESH = 60;   // % moisture to stop irrigation
-
-// Safety Timers (in milliseconds)
-const unsigned long MAX_PUMP_RUN_MS = 60000UL;      // 60 seconds max continuous pump run
-const unsigned long PUMP_COOLDOWN_MS = 30000UL;     // 30 seconds forced cooldown
-const unsigned long BUZZER_SILENCE_TIMEOUT_MS = 10000UL; // Buzzer mutes after 10s of alarm
-
-// Hardware Configuration Flags
-const bool RELAY_ACTIVE_LOW = true;        // Standard 5V relay modules are Active LOW
+DHT dht1(DHT1PIN, DHT22);
+DHT dht2(DHT2PIN, DHT22);
+LiquidCrystal lcd(4, 7, 8, 9, 11, 12);
+Servo vent;
+Servo cover;
 
 // ==========================================
-// INSTANTIATIONS
+// CALIBRATION & THRESHOLD CONSTANTS
 // ==========================================
-LiquidCrystal lcd(PIN_LCD_RS, PIN_LCD_EN, PIN_LCD_D4, PIN_LCD_D5, PIN_LCD_D6, PIN_LCD_D7);
-DHT dhtStorage(PIN_DHT_STORAGE, DHT22);
-DHT dhtGerm(PIN_DHT_GERM, DHT22);
-Servo servoVent;
-Servo servoCover;
+int M1_DRY = 800, M1_WET = 300;
+int M2_DRY = 800, M2_WET = 300;
+int GAS_BASE = 120; // MQ135 clean-air baseline after burn-in
+
+const int SOIL_FAULT_MIN = 50;
+const int SOIL_FAULT_MAX = 1000;
+
+const float STORAGE_TEMP_ALERT = 30.0;
+const float STORAGE_HUMID_ALERT = 65.0;
+const float STORAGE_FAN_HUMID = 60.0;
+const float GERM_VENT_TEMP = 32.0;
+const float FIELD_FAN_TEMP = 33.0;
+
+const int MOIST_PUMP_ON = 35;
+const int MOIST_PUMP_OFF = 60;
+
+const unsigned long MAX_PUMP_RUN_MS = 60000UL;      // 60s max continuous run
+const unsigned long PUMP_COOLDOWN_MS = 30000UL;     // 30s forced cooldown
+const unsigned long BUZZER_TIMEOUT_MS = 10000UL;    // 10s auto-silence
+const unsigned long OVERWATER_LIMIT_MS = 60000UL;   // 60s saturation warning
+
+// Active-LOW relay configuration
+const bool RELAY_ACTIVE_LOW = true;
 
 // ==========================================
-// STATE VARIABLES
+// SYSTEM STATE VARIABLES
 // ==========================================
-enum SystemMode {
-  MODE_STORAGE = 0,
-  MODE_GERMINATION = 1,
-  MODE_FIELD = 2
-};
+uint8_t mode = 0; // 0: STORAGE, 1: GERMINATION, 2: FIELD
 
-volatile SystemMode currentMode = MODE_STORAGE;
+// Telemetry values
+float T1 = 0.0, H1 = 0.0;
+float T2 = 0.0, H2 = 0.0;
+int M1_raw = 0, M2_raw = 0;
+int M1_idx = 0, M2_idx = 0;
+int gas_raw = 0;
+bool dht1_ok = false, dht2_ok = false;
+bool m1_ok = false, m2_ok = false;
+bool mq_ok = false;
 
-// Telemetry Variables
-float temp1 = 0.0, hum1 = 0.0; // Storage DHT
-float temp2 = 0.0, hum2 = 0.0; // Germination/Field DHT
-int soilRaw1 = 0, soilRaw2 = 0;
-int soilPct1 = 0, soilPct2 = 0;
-bool soil1Valid = false, soil2Valid = false;
-int gasRaw = 0;
-float gasBaseline = 120.0;
-bool gasBaselineReady = false;
+// Actuator states
+bool pump_state = false;
+bool fan_state = false;
+bool alert_state = false;
+int vent_angle = 0;
+int cover_angle = 0;
 
-// Actuator States
-bool pumpState = false;
-bool fanState = false;
-bool alertState = false;
-int ventAngle = 0;
-int coverAngle = 0;
+// Explainable decision reason string (printed on LCD Line 2)
+char reason_str[17] = "SYS: OK";
 
-// Timing Keepers (millis)
-unsigned long lastSensorReadTime = 0;
-unsigned long lastSerialTelemetryTime = 0;
-unsigned long lastLcdUpdateTime = 0;
-unsigned long lastButtonCheckTime = 0;
-unsigned long pumpStartTime = 0;
-unsigned long pumpStopTime = 0;
-unsigned long alertStartTime = 0;
-unsigned long buzzerPulseTimer = 0;
-bool buzzerSilenced = false;
-bool servoVentAttached = false;
+// Timing keepers
+unsigned long last_sensor_time = 0;
+unsigned long last_telemetry_time = 0;
+unsigned long last_lcd_time = 0;
+unsigned long pump_start_time = 0;
+unsigned long pump_stop_time = 0;
+unsigned long alert_start_time = 0;
+unsigned long saturated_start_time = 0;
+bool buzzer_silenced = false;
+bool is_overwatered = false;
 
-// Button Debounce
-int lastButtonState = HIGH;
-unsigned long lastDebounceTime = 0;
+// Button debounce
+int last_btn_state = HIGH;
+unsigned long last_debounce_time = 0;
 const unsigned long DEBOUNCE_DELAY_MS = 50;
 
 // ==========================================
-// HELPER FUNCTIONS
+// HELPER FUNCTIONS & ACTUATOR DRIVERS
 // ==========================================
 
 void setPump(bool state) {
-  if (state && !pumpState) {
-    // Check safety cooldown
-    if (millis() - pumpStopTime < PUMP_COOLDOWN_MS && pumpStopTime != 0) {
-      return; // Still cooling down, refuse to start
+  if (state && !pump_state) {
+    if (millis() - pump_stop_time < PUMP_COOLDOWN_MS && pump_stop_time != 0) {
+      return; // In cooldown
     }
-    pumpStartTime = millis();
-    pumpState = true;
-  } else if (!state && pumpState) {
-    pumpStopTime = millis();
-    pumpState = false;
+    pump_start_time = millis();
+    pump_state = true;
+  } else if (!state && pump_state) {
+    pump_stop_time = millis();
+    pump_state = false;
   }
   
-  // Apply hardware state
   if (RELAY_ACTIVE_LOW) {
-    digitalWrite(PIN_RELAY_PUMP, pumpState ? LOW : HIGH);
+    digitalWrite(RELAY, pump_state ? LOW : HIGH);
   } else {
-    digitalWrite(PIN_RELAY_PUMP, pumpState ? HIGH : LOW);
+    digitalWrite(RELAY, pump_state ? HIGH : LOW);
   }
 }
 
 void setFan(bool state) {
-  fanState = state;
-  digitalWrite(PIN_FAN, fanState ? HIGH : LOW);
+  fan_state = state;
+  digitalWrite(FAN, fan_state ? HIGH : LOW);
 }
 
-void updateVentServo(int targetAngle) {
+void updateVent(int targetAngle) {
   targetAngle = constrain(targetAngle, 0, 90);
-  if (targetAngle != ventAngle) {
-    ventAngle = targetAngle;
-    if (!servoVentAttached) {
-      servoVent.attach(PIN_SERVO_VENT);
-      servoVentAttached = true;
-    }
-    servoVent.write(ventAngle);
+  if (targetAngle != vent_angle) {
+    vent_angle = targetAngle;
+    vent.attach(SERVO1);
+    vent.write(vent_angle);
+    delay(100);
+    vent.detach(); // Detach to save power & avoid jitter
   }
 }
 
-void updateCoverServo(int targetAngle) {
+void updateCover(int targetAngle) {
   targetAngle = constrain(targetAngle, 0, 90);
-  if (targetAngle != coverAngle) {
-    coverAngle = targetAngle;
-    servoCover.attach(PIN_SERVO_COVER);
-    servoCover.write(coverAngle);
-    delay(150);
-    servoCover.detach(); // Detach to save power and eliminate jitter
+  if (targetAngle != cover_angle) {
+    cover_angle = targetAngle;
+    cover.attach(SERVO2);
+    cover.write(cover_angle);
+    delay(100);
+    cover.detach();
   }
 }
 
-int rawToMoisturePercent(int rawVal, bool &isValid) {
-  if (rawVal < SOIL_DISCONNECT_MIN || rawVal > SOIL_DISCONNECT_MAX) {
-    isValid = false;
+// Convert raw moisture to 0-100 index (handles either polarity)
+int rawToPercent(int raw, int dry, int wet, bool &valid) {
+  if (raw < SOIL_FAULT_MIN || raw > SOIL_FAULT_MAX) {
+    valid = false;
     return 0;
   }
-  isValid = true;
-  long pct = map(rawVal, SOIL_RAW_DRY, SOIL_RAW_WET, 0, 100);
-  return constrain((int)pct, 0, 100);
+  valid = true;
+  if (dry == wet) return 0;
+  long val = (long)(raw - dry) * 100 / (wet - dry);
+  return constrain((int)val, 0, 100);
 }
 
-void soundBeep(int count, int durationMs) {
+// Dew point calculation (Magnus-Tetens formula approximation)
+float computeDewPoint(float temp, float hum) {
+  float a = 17.27, b = 237.7;
+  float alpha = ((a * temp) / (b + temp)) + log(hum / 100.0);
+  return (b * alpha) / (a - alpha);
+}
+
+void soundBeeps(int count, int durationMs) {
   for (int i = 0; i < count; i++) {
-    digitalWrite(PIN_BUZZER, HIGH);
+    digitalWrite(BUZZ, HIGH);
     delay(durationMs);
-    digitalWrite(PIN_BUZZER, LOW);
+    digitalWrite(BUZZ, LOW);
     if (i < count - 1) delay(durationMs);
   }
 }
 
 // ==========================================
-// SENSOR ACQUISITION
+// SENSOR ACQUISITION & VALIDATION
 // ==========================================
-void readAllSensors() {
-  // Read DHT22 #1 (Storage)
-  float t1 = dhtStorage.readTemperature();
-  float h1 = dhtStorage.readHumidity();
-  if (!isnan(t1)) temp1 = t1;
-  if (!isnan(h1)) hum1 = h1;
+void readAndValidateSensors() {
+  // Read Storage DHT
+  float t1 = dht1.readTemperature();
+  float h1 = dht1.readHumidity();
+  if (!isnan(t1) && !isnan(h1)) {
+    T1 = t1;
+    H1 = h1;
+    dht1_ok = true;
+  } else {
+    dht1_ok = false;
+  }
 
-  // Read DHT22 #2 (Germination / Field)
-  float t2 = dhtGerm.readTemperature();
-  float h2 = dhtGerm.readHumidity();
-  if (!isnan(t2)) temp2 = t2;
-  if (!isnan(h2)) hum2 = h2;
+  // Read Germination DHT
+  float t2 = dht2.readTemperature();
+  float h2 = dht2.readHumidity();
+  if (!isnan(t2) && !isnan(h2)) {
+    T2 = t2;
+    H2 = h2;
+    dht2_ok = true;
+  } else {
+    dht2_ok = false;
+  }
 
-  // Read Soil Moisture
-  soilRaw1 = analogRead(PIN_SOIL_1);
-  soilRaw2 = analogRead(PIN_SOIL_2);
-  soilPct1 = rawToMoisturePercent(soilRaw1, soil1Valid);
-  soilPct2 = rawToMoisturePercent(soilRaw2, soil2Valid);
+  // Read Soil Probes
+  M1_raw = analogRead(M1);
+  M2_raw = analogRead(M2);
+  M1_idx = rawToPercent(M1_raw, M1_DRY, M1_WET, m1_ok);
+  M2_idx = rawToPercent(M2_raw, M2_DRY, M2_WET, m2_ok);
 
-  // Read MQ-135 Gas
-  gasRaw = analogRead(PIN_MQ135);
+  // Read MQ135 Gas
+  gas_raw = analogRead(GAS);
+  mq_ok = (gas_raw > 20);
 
-  // Dynamic baseline update during initial startup (rolling filter)
-  if (!gasBaselineReady) {
-    static int sampleCount = 0;
-    static long sumGas = 0;
-    sumGas += gasRaw;
-    sampleCount++;
-    if (sampleCount >= 20) {
-      gasBaseline = (float)sumGas / sampleCount;
-      gasBaselineReady = true;
+  // Dynamic baseline calibration during first 15 samples if default
+  static int base_samples = 0;
+  static long base_sum = 0;
+  if (base_samples < 15) {
+    base_sum += gas_raw;
+    base_samples++;
+    if (base_samples == 15) {
+      GAS_BASE = base_sum / 15;
     }
+  }
+
+  // Overwatering detection tracking: if M1 > 85% continuously for > 60s
+  if (m1_ok && M1_idx > 85) {
+    if (saturated_start_time == 0) saturated_start_time = millis();
+    else if (millis() - saturated_start_time > OVERWATER_LIMIT_MS) {
+      is_overwatered = true;
+    }
+  } else {
+    saturated_start_time = 0;
+    is_overwatered = false;
   }
 }
 
 // ==========================================
-// MODE LOGIC & SAFETY CONTROLLERS
+// EXPLAINABLE STATE MACHINE (X-CPS)
 // ==========================================
-void evaluateStorageMode() {
-  // Turn off irrelevant actuators
+
+void evaluateStorage() {
   setPump(false);
-  updateVentServo(0);
-  updateCoverServo(0);
+  updateVent(0);
 
-  bool tempOver = (temp1 > STORAGE_TEMP_ALERT);
-  bool humOver = (hum1 > STORAGE_HUMID_ALERT);
-  bool gasOver = (gasBaselineReady && (gasRaw > (gasBaseline * 1.5)));
+  bool temp_alert = (dht1_ok && T1 > STORAGE_TEMP_ALERT);
+  bool humid_alert = (dht1_ok && H1 > STORAGE_HUMID_ALERT);
+  bool gas_alert = (mq_ok && gas_raw > (int)(1.5 * GAS_BASE));
 
-  if (tempOver || humOver || gasOver) {
-    if (!alertState) {
-      alertState = true;
-      alertStartTime = millis();
-      buzzerSilenced = false;
+  // Dew point condensation detection (grain sweating warning)
+  float dewPoint = computeDewPoint(T1, H1);
+  bool condensation_risk = (dht1_ok && (T1 - dewPoint) < 2.0);
+
+  if (temp_alert || humid_alert || gas_alert || condensation_risk) {
+    if (!alert_state) {
+      alert_state = true;
+      alert_start_time = millis();
+      buzzer_silenced = false;
+    }
+    if (condensation_risk) {
+      snprintf(reason_str, sizeof(reason_str), "DEW CONDENSATION");
+    } else if (gas_alert) {
+      snprintf(reason_str, sizeof(reason_str), "ALRT: GAS > 1.5X");
+    } else if (humid_alert) {
+      snprintf(reason_str, sizeof(reason_str), "ALRT: HUMID>65%%");
+    } else {
+      snprintf(reason_str, sizeof(reason_str), "ALRT: TEMP>30C");
     }
   } else {
-    alertState = false;
-    buzzerSilenced = false;
+    alert_state = false;
+    if (dht1_ok && H1 > STORAGE_FAN_HUMID) {
+      snprintf(reason_str, sizeof(reason_str), "FAN ON: HUM>60%%");
+    } else {
+      snprintf(reason_str, sizeof(reason_str), "GAS OK / VENT:OF");
+    }
   }
 
   // Aeration Fan control
-  if (hum1 > STORAGE_FAN_HUMID) {
+  if (dht1_ok && H1 > STORAGE_FAN_HUMID) {
     setFan(true);
   } else {
     setFan(false);
   }
 }
 
-void evaluateGerminationMode() {
-  // Reset storage alerts
+void evaluateGermination() {
   setFan(false);
-  alertState = false;
+  alert_state = false;
 
-  // Pump control logic based on moisture
-  int activeMoisture = (soil1Valid) ? soilPct1 : ((soil2Valid) ? soilPct2 : 0);
-
-  // Fail-safe: If sensors are invalid / disconnected, never turn pump on
-  if (!soil1Valid && !soil2Valid) {
+  // 1. Critical Sensor Fault Check
+  if (!m1_ok && !m2_ok) {
     setPump(false);
-    alertState = true; // Flag sensor disconnect alert
-  } else {
-    if (activeMoisture < MOISTURE_PUMP_ON_THRESH) {
+    alert_state = true;
+    snprintf(reason_str, sizeof(reason_str), "SENSOR FAULT ACT OF");
+    return;
+  }
+
+  // 2. Overwatering Root-Rot Alert
+  if (is_overwatered) {
+    setPump(false);
+    snprintf(reason_str, sizeof(reason_str), "OVERWATER: NO PUMP");
+    return;
+  }
+
+  // 3. Irrigation Automation with Refusals
+  int activeM = m1_ok ? M1_idx : M2_idx;
+  if (activeM < MOIST_PUMP_ON) {
+    if (millis() - pump_stop_time < PUMP_COOLDOWN_MS && pump_stop_time != 0 && !pump_state) {
+      snprintf(reason_str, sizeof(reason_str), "PUMP REFUSE: CDWN");
+    } else {
       setPump(true);
-    } else if (activeMoisture >= MOISTURE_PUMP_OFF_THRESH) {
-      setPump(false);
+      snprintf(reason_str, sizeof(reason_str), "PUMP ON WHY M1<35");
+    }
+  } else if (activeM >= MOIST_PUMP_OFF) {
+    setPump(false);
+    snprintf(reason_str, sizeof(reason_str), "PUMP OFF: M OK");
+  } else {
+    if (!pump_state) {
+      snprintf(reason_str, sizeof(reason_str), "PUMP OFF: M OK");
     }
   }
 
-  // Enforce Max Pump Run-Time Safety Trip
-  if (pumpState && (millis() - pumpStartTime > MAX_PUMP_RUN_MS)) {
-    setPump(false); // Force emergency pump cutoff
-    alertState = true;
+  // 4. Max continuous pump run safety cutoff
+  if (pump_state && (millis() - pump_start_time > MAX_PUMP_RUN_MS)) {
+    setPump(false);
+    alert_state = true;
+    snprintf(reason_str, sizeof(reason_str), "SAFETY TRIP: 60S");
   }
 
-  // Microclimate Vent Servo: proportional above 32C
-  if (temp2 > GERM_TEMP_VENT) {
-    // Map 32.0C to 38.0C -> 0 deg to 90 deg
-    float excess = temp2 - GERM_TEMP_VENT;
-    int targetA = constrain((int)(excess * 15.0), 0, 90);
-    updateVentServo(targetA);
+  // 5. Vent Proportional Control with "Know When Not To Act" Refusal
+  if (dht2_ok && T2 > GERM_VENT_TEMP) {
+    // If outside is damper than tray, opening vent introduces dampness!
+    if (dht1_ok && H1 > (H2 + 6.0) && H1 > 75.0) {
+      updateVent(0);
+      snprintf(reason_str, sizeof(reason_str), "VENT BLOCKED:OUTSIDE DAMP");
+    } else {
+      float excess = T2 - GERM_VENT_TEMP;
+      int targetA = constrain((int)(excess * 15.0), 0, 90);
+      updateVent(targetA);
+      if (!pump_state && !alert_state) {
+        snprintf(reason_str, sizeof(reason_str), "VENT ON T2>32C");
+      }
+    }
   } else {
-    updateVentServo(0);
+    updateVent(0);
   }
 }
 
-void evaluateFieldMode() {
-  alertState = false;
+void evaluateField() {
+  alert_state = false;
 
-  // Dual-zone irrigation logic:
-  // If either zone drops below threshold, irrigate (safety clamped)
-  bool needWater = false;
-  if (soil1Valid && soilPct1 < MOISTURE_PUMP_ON_THRESH) needWater = true;
-  if (soil2Valid && soilPct2 < MOISTURE_PUMP_ON_THRESH) needWater = true;
+  // Sensor Cross-Validation: If both sensors are valid but disagree by > 50%
+  if (m1_ok && m2_ok && abs(M1_idx - M2_idx) > 55) {
+    snprintf(reason_str, sizeof(reason_str), "ZONE SKEW > 55%%");
+  }
 
-  if (soil1Valid && soilPct1 >= MOISTURE_PUMP_OFF_THRESH && 
-      soil2Valid && soilPct2 >= MOISTURE_PUMP_OFF_THRESH) {
+  if (!m1_ok && !m2_ok) {
+    setPump(false);
+    alert_state = true;
+    snprintf(reason_str, sizeof(reason_str), "SENSOR FAULT ACT OF");
+    return;
+  }
+
+  bool needWater = (m1_ok && M1_idx < MOIST_PUMP_ON) || (m2_ok && M2_idx < MOIST_PUMP_ON);
+  if (m1_ok && M1_idx >= MOIST_PUMP_OFF && m2_ok && M2_idx >= MOIST_PUMP_OFF) {
     needWater = false;
   }
 
-  // Safety checks
-  if (!soil1Valid && !soil2Valid) {
-    setPump(false);
-    alertState = true;
-  } else if (needWater) {
-    setPump(true);
+  if (needWater) {
+    if (millis() - pump_stop_time < PUMP_COOLDOWN_MS && pump_stop_time != 0 && !pump_state) {
+      snprintf(reason_str, sizeof(reason_str), "PUMP REFUSE: CDWN");
+    } else {
+      setPump(true);
+      snprintf(reason_str, sizeof(reason_str), "PUMP ON: FIELD DRY");
+    }
   } else {
     setPump(false);
+    snprintf(reason_str, sizeof(reason_str), "PUMP: OFF (SAT)");
   }
 
-  if (pumpState && (millis() - pumpStartTime > MAX_PUMP_RUN_MS)) {
+  if (pump_state && (millis() - pump_start_time > MAX_PUMP_RUN_MS)) {
     setPump(false);
-    alertState = true;
+    alert_state = true;
+    snprintf(reason_str, sizeof(reason_str), "SAFETY TRIP: 60S");
   }
 
-  // High Temperature Heat-Stress Fan Cooling
-  if (temp2 > FIELD_TEMP_FAN) {
+  // Canopy Heat-Stress Alleviation Fan
+  if (dht2_ok && T2 > FIELD_FAN_TEMP) {
     setFan(true);
+    if (!pump_state) snprintf(reason_str, sizeof(reason_str), "FAN ON: T2>33C");
   } else {
     setFan(false);
   }
 
-  updateVentServo(0);
+  updateVent(0);
 }
 
 // ==========================================
-// ALERT ANNUNCIATION
+// ALERT ANNUNCIATOR
 // ==========================================
-void handleAlertAnnunciation() {
-  if (alertState) {
-    digitalWrite(PIN_STATUS_LED, HIGH); // Latched LED
-
-    // Buzzer logic: pulses for up to 10s, then silences
-    if (!buzzerSilenced) {
-      if (millis() - alertStartTime > BUZZER_SILENCE_TIMEOUT_MS) {
-        buzzerSilenced = true;
-        digitalWrite(PIN_BUZZER, LOW);
+void handleAlerts() {
+  if (alert_state) {
+    digitalWrite(SLED, HIGH);
+    if (!buzzer_silenced) {
+      if (millis() - alert_start_time > BUZZER_TIMEOUT_MS) {
+        buzzer_silenced = true;
+        digitalWrite(BUZZ, LOW);
       } else {
-        // Pulse pattern every 500ms
-        if ((millis() / 250) % 2 == 0) {
-          digitalWrite(PIN_BUZZER, HIGH);
-        } else {
-          digitalWrite(PIN_BUZZER, LOW);
-        }
+        // 250ms pulsed chime
+        digitalWrite(BUZZ, ((millis() / 250) % 2 == 0) ? HIGH : LOW);
       }
     } else {
-      digitalWrite(PIN_BUZZER, LOW);
+      digitalWrite(BUZZ, LOW);
     }
   } else {
-    digitalWrite(PIN_STATUS_LED, LOW);
-    digitalWrite(PIN_BUZZER, LOW);
-    buzzerSilenced = false;
+    digitalWrite(SLED, LOW);
+    digitalWrite(BUZZ, LOW);
+    buzzer_silenced = false;
   }
 }
 
 // ==========================================
-// USER INTERFACE (16x2 4-BIT LCD)
+// 16x2 LCD UI (EXPLAINABLE)
 // ==========================================
-void updateLcdDisplay() {
-  char line0[17];
-  char line1[17];
+void updateLcd() {
+  char l0[17];
+  char l1[17];
 
-  switch (currentMode) {
-    case MODE_STORAGE: {
-      // Line 0: [STG] T:28C H:58%
-      snprintf(line0, sizeof(line0), "[STG] T:%2dC H:%2d%%", (int)temp1, (int)hum1);
-      // Line 1: G:115  [OK] or [ALRT]
-      if (alertState) {
-        snprintf(line1, sizeof(line1), "G:%-4d [ALRT:GAS]", gasRaw);
-      } else {
-        snprintf(line1, sizeof(line1), "G:%-4d [SYS: OK]", gasRaw);
-      }
+  switch (mode) {
+    case 0: // STORAGE
+      snprintf(l0, sizeof(l0), "STG %2.0fC %2.0f%% G:%d", T1, H1, gas_raw);
+      snprintf(l1, sizeof(l1), "%-16s", reason_str);
       break;
-    }
-    case MODE_GERMINATION: {
-      // Line 0: [GER] M1:42% M2:39%
-      snprintf(line0, sizeof(line0), "[GER] M1:%2d%% M2:%2d%%", soilPct1, soilPct2);
-      // Line 1: T:31C P:ON* V:45
-      char pChar = pumpState ? '*' : ' ';
-      snprintf(line1, sizeof(line1), "T:%2dC P:%s%c V:%-2d", 
-               (int)temp2, pumpState ? "ON" : "OF", pChar, ventAngle);
+    case 1: // GERMINATION
+      snprintf(l0, sizeof(l0), "GERM %2.0fC M1:%2d%%", T2, M1_idx);
+      snprintf(l1, sizeof(l1), "%-16s", reason_str);
       break;
-    }
-    case MODE_FIELD: {
-      // Line 0: [FLD] ZA:32% ZB:48%
-      snprintf(line0, sizeof(line0), "[FLD] ZA:%2d%% ZB:%2d%%", soilPct1, soilPct2);
-      // Line 1: T:34C P:ON  F:ON
-      snprintf(line1, sizeof(line1), "T:%2dC P:%-2s F:%-2s",
-               (int)temp2, pumpState ? "ON" : "--", fanState ? "ON" : "--");
+    case 2: // FIELD
+      snprintf(l0, sizeof(l0), "FLD M1:%2d M2:%2d", M1_idx, M2_idx);
+      snprintf(l1, sizeof(l1), "%-16s", reason_str);
       break;
-    }
   }
 
   lcd.setCursor(0, 0);
-  lcd.print(line0);
+  lcd.print(l0);
   lcd.setCursor(0, 1);
-  lcd.print(line1);
+  lcd.print(l1);
 }
 
 // ==========================================
-// SERIAL TELEMETRY & COMMAND HANDLER
+// SERIAL TELEMETRY & REMOTE COMMAND PARSER
 // ==========================================
-void sendSerialTelemetry() {
-  // FORMAT: MODE,T1,H1,T2,H2,M1,M2,GAS,PUMP,FAN,ALERT
-  Serial.print((int)currentMode);
+void sendTelemetry() {
+  // FORMAT: MODE,T1,H1,T2,H2,M1,M2,GAS,PUMP,FAN,ALERT,REASON
+  Serial.print((int)mode);
   Serial.print(",");
-  Serial.print(temp1, 1);
+  Serial.print(T1, 1);
   Serial.print(",");
-  Serial.print(hum1, 1);
+  Serial.print(H1, 1);
   Serial.print(",");
-  Serial.print(temp2, 1);
+  Serial.print(T2, 1);
   Serial.print(",");
-  Serial.print(hum2, 1);
+  Serial.print(H2, 1);
   Serial.print(",");
-  Serial.print(soilPct1);
+  Serial.print(M1_idx);
   Serial.print(",");
-  Serial.print(soilPct2);
+  Serial.print(M2_idx);
   Serial.print(",");
-  Serial.print(gasRaw);
+  Serial.print(gas_raw);
   Serial.print(",");
-  Serial.print(pumpState ? 1 : 0);
+  Serial.print(pump_state ? 1 : 0);
   Serial.print(",");
-  Serial.print(fanState ? 1 : 0);
+  Serial.print(fan_state ? 1 : 0);
   Serial.print(",");
-  Serial.println(alertState ? 1 : 0);
+  Serial.print(alert_state ? 1 : 0);
+  Serial.print(",");
+  Serial.println(reason_str);
 }
 
-void checkIncomingCommands() {
+void parseSerialCommands() {
+  static String cmdBuffer = "";
   while (Serial.available() > 0) {
-    char cmd = Serial.read();
-    if (cmd == 'M' || cmd == 'm') {
-      delay(5);
-      if (Serial.available() > 0) {
-        char modeChar = Serial.read();
-        if (modeChar >= '0' && modeChar <= '2') {
-          currentMode = (SystemMode)(modeChar - '0');
-          soundBeep(1, 40);
-          updateLcdDisplay();
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      cmdBuffer.trim();
+      if (cmdBuffer.startsWith("MODE:")) {
+        int targetMode = cmdBuffer.substring(5).toInt();
+        if (targetMode >= 0 && targetMode <= 2) {
+          mode = (uint8_t)targetMode;
+          soundBeeps(mode + 1, 50);
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("REMOTE COMMAND:");
+          lcd.setCursor(0, 1);
+          lcd.print(mode == 0 ? "-> STORAGE" : (mode == 1 ? "-> GERMINATION" : "-> FIELD"));
+          delay(800);
+          updateLcd();
         }
+      } else if (cmdBuffer.equals("PUMP:ON")) {
+        setPump(true);
+      } else if (cmdBuffer.equals("PUMP:OFF")) {
+        setPump(false);
       }
-    } else if (cmd == 'C' || cmd == 'c') {
-      // Cover servo toggle for demo
-      coverAngle = (coverAngle == 0) ? 90 : 0;
-      updateCoverServo(coverAngle);
+      cmdBuffer = "";
+    } else {
+      if (cmdBuffer.length() < 30) {
+        cmdBuffer += c;
+      }
     }
   }
 }
 
 // ==========================================
-// BUTTON INPUT (DEBOUNCED MODE CYCLING)
+// BUTTON INPUT (DEBOUNCED CYCLIC)
 // ==========================================
-void checkModeButton() {
-  int reading = digitalRead(PIN_BUTTON_MODE);
-  if (reading != lastButtonState) {
-    lastDebounceTime = millis();
+void checkButton() {
+  int r = digitalRead(BTN);
+  if (r != last_btn_state) {
+    last_debounce_time = millis();
   }
 
-  if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY_MS) {
-    static int debouncedState = HIGH;
-    if (reading != debouncedState) {
-      debouncedState = reading;
-      if (debouncedState == LOW) { // Button Pressed
-        // Cycle mode: 0 -> 1 -> 2 -> 0
-        if (currentMode == MODE_STORAGE) currentMode = MODE_GERMINATION;
-        else if (currentMode == MODE_GERMINATION) currentMode = MODE_FIELD;
-        else currentMode = MODE_STORAGE;
+  if ((millis() - last_debounce_time) > DEBOUNCE_DELAY_MS) {
+    static int debounced = HIGH;
+    if (r != debounced) {
+      debounced = r;
+      if (debounced == LOW) { // Button Pressed
+        mode = (mode + 1) % 3;
+        soundBeeps(mode + 1, 60);
 
-        soundBeep(currentMode + 1, 50); // Feedback beeps corresponding to mode
-        updateLcdDisplay();
+        // Show mode splash for 1.5s as per manual
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("MODE SWITCHED:");
+        lcd.setCursor(0, 1);
+        if (mode == 0) lcd.print("0: STORAGE");
+        else if (mode == 1) lcd.print("1: GERMINATION");
+        else lcd.print("2: FIELD");
+        delay(1200);
+        updateLcd();
       }
     }
   }
-  lastButtonState = reading;
+  last_btn_state = r;
 }
 
 // ==========================================
-// SETUP & SELF-TEST (PHASE 1 REQUIREMENT)
+// SETUP & POWER-ON SELF-TEST
 // ==========================================
 void setup() {
-  // CRITICAL: Initialize relay pin HIGH before configuring OUTPUT to prevent boot click
+  // CRITICAL: Set active-LOW relay pin HIGH before configuring OUTPUT
   if (RELAY_ACTIVE_LOW) {
-    digitalWrite(PIN_RELAY_PUMP, HIGH);
+    digitalWrite(RELAY, HIGH);
   } else {
-    digitalWrite(PIN_RELAY_PUMP, LOW);
+    digitalWrite(RELAY, LOW);
   }
-  pinMode(PIN_RELAY_PUMP, OUTPUT);
+  pinMode(RELAY, OUTPUT);
 
-  pinMode(PIN_FAN, OUTPUT);
-  digitalWrite(PIN_FAN, LOW);
+  pinMode(FAN, OUTPUT);
+  digitalWrite(FAN, LOW);
 
-  pinMode(PIN_BUZZER, OUTPUT);
-  digitalWrite(PIN_BUZZER, LOW);
+  pinMode(BUZZ, OUTPUT);
+  digitalWrite(BUZZ, LOW);
 
-  pinMode(PIN_STATUS_LED, OUTPUT);
-  digitalWrite(PIN_STATUS_LED, LOW);
+  pinMode(SLED, OUTPUT);
+  digitalWrite(SLED, LOW);
 
-  pinMode(PIN_BUTTON_MODE, INPUT_PULLUP);
+  pinMode(BTN, INPUT_PULLUP);
 
-  // Initialize Serial
   Serial.begin(115200);
 
-  // Initialize LCD
+  // LCD Splash: "Chiguru / TerraByte" 2s
   lcd.begin(16, 2);
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("CHIGURU - v1.0");
+  lcd.print("Chiguru / YEN");
   lcd.setCursor(0, 1);
-  lcd.print("TerraByte (YEN)");
-  
-  // Power-on self-test chime
-  soundBeep(2, 60);
-  delay(1200);
+  lcd.print("TerraByte v1.0");
 
-  // Initialize Sensors
-  dhtStorage.begin();
-  dhtGerm.begin();
+  soundBeeps(2, 60);
+  delay(1800);
 
-  // Self-test diagnostic display
+  // Initialize sensors
+  dht1.begin();
+  dht2.begin();
+
+  // Self-test sequence: read every sensor once
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("SELF-TEST RUN...");
+  lcd.print("SELF-TESTING...");
+  delay(600);
 
-  delay(500);
-  readAllSensors();
+  readAndValidateSensors();
 
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("D1:");
-  lcd.print(isnan(temp1) ? "ERR " : "OK  ");
-  lcd.print("D2:");
-  lcd.print(isnan(temp2) ? "ERR" : "OK");
+  if (!dht1_ok || !dht2_ok || !m1_ok || !mq_ok) {
+    lcd.setCursor(0, 0);
+    lcd.print(!dht1_ok ? "DHT1 ERR " : (!dht2_ok ? "DHT2 FAULT" : "DHT OK"));
+    lcd.setCursor(0, 1);
+    lcd.print(!m1_ok ? "M1 FAULT " : (!mq_ok ? "MQ FAULT" : "M/GAS OK"));
+  } else {
+    lcd.setCursor(0, 0);
+    lcd.print("ALL SENSORS: OK");
+    lcd.setCursor(0, 1);
+    lcd.print("ACTUATORS: READY");
+  }
+  delay(1400);
 
-  lcd.setCursor(0, 1);
-  lcd.print("M:");
-  lcd.print(soil1Valid ? "OK " : "NC ");
-  lcd.print("GAS:");
-  lcd.print(gasRaw > 20 ? "OK" : "NC");
+  // Move servos to safe starting angles
+  updateVent(0);
+  updateCover(0);
 
-  delay(1500);
   lcd.clear();
 }
 
 // ==========================================
-// MAIN LOOP (NON-BLOCKING)
+// MAIN MULTITASKING LOOP (NON-BLOCKING)
 // ==========================================
 void loop() {
-  unsigned long currentMillis = millis();
+  unsigned long now = millis();
 
-  // 1. Check Button Input (continuous)
-  checkModeButton();
+  // 1. Continuous inputs
+  checkButton();
+  parseSerialCommands();
+  handleAlerts();
 
-  // 2. Check Incoming Serial Commands from Dashboard
-  checkIncomingCommands();
+  // 2. Sensor reading & state machine evaluation every 2s
+  if (now - last_sensor_time >= 2000) {
+    last_sensor_time = now;
+    readAndValidateSensors();
 
-  // 3. Sensor Acquisition (Every 2000 ms)
-  if (currentMillis - lastSensorReadTime >= 2000) {
-    lastSensorReadTime = currentMillis;
-    readAllSensors();
-
-    // Evaluate Mode Automata
-    switch (currentMode) {
-      case MODE_STORAGE:
-        evaluateStorageMode();
-        break;
-      case MODE_GERMINATION:
-        evaluateGerminationMode();
-        break;
-      case MODE_FIELD:
-        evaluateFieldMode();
-        break;
+    switch (mode) {
+      case 0: evaluateStorage(); break;
+      case 1: evaluateGermination(); break;
+      case 2: evaluateField(); break;
     }
   }
 
-  // 4. Handle Alerts & Annunciators (continuous)
-  handleAlertAnnunciation();
-
-  // 5. Update LCD Screen (Every 500 ms)
-  if (currentMillis - lastLcdUpdateTime >= 500) {
-    lastLcdUpdateTime = currentMillis;
-    updateLcdDisplay();
+  // 3. LCD refresh every 500ms
+  if (now - last_lcd_time >= 500) {
+    last_lcd_time = now;
+    updateLcd();
   }
 
-  // 6. Transmit Telemetry CSV (Every 1000 ms)
-  if (currentMillis - lastSerialTelemetryTime >= 1000) {
-    lastSerialTelemetryTime = currentMillis;
-    sendSerialTelemetry();
+  // 4. Telemetry CSV broadcast every 1s
+  if (now - last_telemetry_time >= 1000) {
+    last_telemetry_time = now;
+    sendTelemetry();
   }
 }

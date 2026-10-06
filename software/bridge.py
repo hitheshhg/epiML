@@ -25,7 +25,7 @@ LOG_FILE = os.path.join(DATA_DIR, "log.csv")
 LATEST_FILE = os.path.join(DATA_DIR, "latest.json")
 CMD_FILE = os.path.join(DATA_DIR, "cmd.txt")
 
-CSV_HEADER = "timestamp,mode,temp1,hum1,temp2,hum2,soil1,soil2,gas,pump,fan,alert\n"
+CSV_HEADER = "timestamp,mode,temp1,hum1,temp2,hum2,soil1,soil2,gas,pump,fan,alert,reason\n"
 
 def ensure_data_dir():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -46,9 +46,10 @@ def find_arduino_port():
 
 def parse_telemetry_line(raw_line):
     parts = raw_line.strip().split(",")
-    if len(parts) != 11:
+    if len(parts) < 11:
         return None
     try:
+        reason = parts[11].strip() if len(parts) >= 12 else "SYS: OK"
         data = {
             "timestamp": datetime.now().isoformat(),
             "mode": int(parts[0]),
@@ -62,6 +63,7 @@ def parse_telemetry_line(raw_line):
             "pump": int(parts[8]),
             "fan": int(parts[9]),
             "alert": int(parts[10]),
+            "reason": reason,
             "is_live": True
         }
         return data
@@ -133,7 +135,7 @@ def main():
                         csv_entry = (
                             f"{data['timestamp']},{data['mode']},{data['temp1']},{data['hum1']},"
                             f"{data['temp2']},{data['hum2']},{data['soil1']},{data['soil2']},"
-                            f"{data['gas']},{data['pump']},{data['fan']},{data['alert']}\n"
+                            f"{data['gas']},{data['pump']},{data['fan']},{data['alert']},{data['reason']}\n"
                         )
                         with open(LOG_FILE, "a", encoding="utf-8") as f:
                             f.write(csv_entry)
@@ -154,7 +156,7 @@ def main():
 
                         print(f"[{t_str}] [{m_str:11}] T1:{data['temp1']:4.1f}C H1:{data['hum1']:3.0f}% | "
                               f"M1:{data['soil1']:2d}% M2:{data['soil2']:2d}% | Gas:{data['gas']:3d} | "
-                              f"Pump:{pump_str:3} Fan:{fan_str:3} | [{alrt_str}]")
+                              f"Pump:{pump_str:3} Fan:{fan_str:3} | [{alrt_str}] | Reason: {data['reason']}")
                 else:
                     time.sleep(0.05)
 

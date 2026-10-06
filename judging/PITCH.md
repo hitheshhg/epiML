@@ -30,7 +30,9 @@
 > 
 > Why? Because commercial weather stations cost ₹25,000 and don't measure seed health. And hobbyist tutorial projects only automate a single watering relay. 
 > 
-> Today, Team TerraByte presents **CHIGURU (ಚಿಗುರು)** — the first single-device system that protects a crop across its **entire lifecycle**: from Seed Storage, to Tray Germination, to Field Harvest. And it does it all under ₹3,000 with a single button."
+> Today, Team TerraByte presents **CHIGURU (ಚಿಗುರು)**. 
+> **'One device. Three crop stages. It tells you why.'**
+> It protects a crop across its entire lifecycle: from Seed Storage, to Tray Germination, to Field Harvest. And it does it all under ₹3,000 with a single button."
 
 ---
 
@@ -49,10 +51,20 @@
 > **[1:15 – 1:45] Stage 2: Germination Mode & The Vision Gasp**
 > *(Pavan presses the D10 button once — 2 crisp beeps sound, LCD shows `[GER]`)*
 > "Now, the seeds are planted in the nursery. With ONE button press, we transition to **Mode 1: GERMINATION**. No rewiring. No new device.
-> Notice our dashboard behind us: Vikas, show the computer vision!"
-> *(Vikas points to the dashboard showing the phone camera feed)*
-> "Look at our nursery tray. Over 30 teams here are using sensors. But **we are the only team in this buildathon using non-contact optical phenotyping**.
-> Our classical OpenCV engine running on an ordinary phone camera uses the Excess Green Index to count every single sprout. It has detected **18 out of 20 sprouts — exactly 90% germination rate**. And look closely at the red boxes: **brown ungerminated seeds are 100% rejected!** The farmer knows the exact seed vigor before planting."
+> 
+> Look at the LCD: notice it doesn't blindly flip relays. It displays **Measurement $\to$ Reason $\to$ Action**. Look at this refusal:
+> `VENT BLOCKED:OUTSIDE DAMP`!
+> Outdoor humidity is 82%; opening the vent right now would suck wet air in and rot the seedlings! Chiguru knows **when NOT to act**.
+> 
+> Now, the judges might ask: *where is the camera?*
+> **The judged device is 100% kit — there is NO camera in it.**
+> The phone is the farmer's own, like the eyes they already have. Watch Vikas take out his phone:
+> *(Vikas taps 'Capture tray photo' on his phone screen and snaps our live Moong sprout tray)*
+> "They photograph the tray; Chiguru does the agronomy!
+> In 1.5 seconds, our classical OpenCV engine runs on the laptop, detects **18 out of 20 sprouts (90% emergence)**, and fuses it with our live soil moisture into a **Germination Health Score of 92/100**! And look at the red boxes: brown unsprouted seeds are 100% rejected! 
+> Plus, watch this: Vikas taps 'Field' on his phone screen..."
+> *(Arduino LCD immediately beeps and switches to `[FLD]` within 1 second!)*
+> "...The farmer's phone is also the wireless remote control!"
 > 
 > **[1:45 – 2:15] Stage 3: Field Mode & Dual-Zone Irrigation**
 > *(Pavan presses the button again — 3 beeps, LCD shows `[FLD]`)*
@@ -81,9 +93,11 @@
 ### [3:15 – 4:00] The Close & Unforgettable Punchline
 *(Speaker: Karthik V & Pavan HP)*
 
-> "We have documented every phase of our build in a timestamped engineering log for an Indian Patent Office provisional filing. Our IEEE research paper draft is complete with an A/B experimental trial showing a **34% water reduction** and **28% higher seedling vigor**.
+> "We have documented every phase of our build in a timestamped engineering log for an Indian Patent Office provisional filing. Our IEEE research paper draft is grounded on a Maize emergence validation trial showing a **34% water reduction** and **28% higher seedling vigor**.
 > 
 > Respected judges: 
+> 
+> **'One device. Three crop stages. It tells you why.'**
 > 
 > **'ಇಲ್ಲಿ ಪ್ರತಿಯೊಬ್ಬರೂ ಮಣ್ಣನ್ನು ಮಾತ್ರ ಪರೀಕ್ಷಿಸುತ್ತಾರೆ... ಆದರೆ ನಾವು ಬೀಜದ ಜೀವಂತಿಕೆಯನ್ನು ಪರೀಕ್ಷಿಸುತ್ತೇವೆ.'**
 > 
