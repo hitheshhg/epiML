@@ -1,705 +1,534 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import ResearchNavbar from "@/components/ResearchNavbar";
-import ExperimentHeader from "@/components/ExperimentHeader";
-import DigitalTwinTray from "@/components/DigitalTwinTray";
-import CellResearchDrawer from "@/components/CellResearchDrawer";
-import ExposureResponseAnalytics from "@/components/ExposureResponseAnalytics";
-import DataProvenanceEvidence from "@/components/DataProvenanceEvidence";
-import SensorCalibrationCenter from "@/components/SensorCalibrationCenter";
-import PublicDataExplorer from "@/components/PublicDataExplorer";
-import ResearchReportModal from "@/components/ResearchReportModal";
-import JuryDemoController from "@/components/JuryDemoController";
-
-// Preserved Hardware Components (Refactored around Experimental Control)
-import SensorGrid from "@/components/SensorGrid";
-import ActuatorControls from "@/components/ActuatorControls";
-import CadViewer from "@/components/CadViewer";
-import CropAdaptiveControl from "@/components/CropAdaptiveControl";
-
-import { Language } from "@/lib/translations";
+import React from "react";
+import Link from "next/link";
+import { LandingHeroTray } from "../components/LandingHeroTray";
+import { useAuth } from "../context/AuthContext";
 import {
-  Experiment,
-  CellData,
-  BiologicalEventState,
-  DataClass,
-} from "@/lib/experimentTypes";
-import {
-  PRIMARY_EXPERIMENT_001,
-  BENCHMARK_EXPERIMENT_002,
-  ALL_EXPERIMENTS,
-  getExperimentById,
-  generateRandomizedTreatmentMap,
-  calculateGerminationMetrics,
-} from "@/lib/experimentService";
-import {
-  PlantProfile,
-  CropType,
-  GrowthStage,
-  SensorState,
-  ActuatorHistory,
-  DecisionResult,
-  getProfile,
-} from "@/lib/plantProfiles";
-import { evaluateDecision } from "@/lib/decisionEngine";
+  Sprout,
+  ArrowRight,
+  Eye,
+  Activity,
+  Database,
+  Cpu,
+  BookOpen,
+  CheckCircle2,
+  Sliders,
+  ShieldCheck,
+  FileSpreadsheet,
+  Layers,
+  Sparkles,
+} from "lucide-react";
 
-interface TelemetryData {
-  timestamp: string;
-  mode: number;
-  temp1: number;
-  hum1: number;
-  temp2: number;
-  hum2: number;
-  soil1: number;
-  soil2: number;
-  gas: number;
-  pump: number;
-  fan: number;
-  alert: number;
-  reason: string;
-  is_hardware_live?: boolean;
-}
-
-export default function ResearchPlatformHome() {
-  const [lang, setLang] = useState<Language>("en");
-  const [activeTab, setActiveTab] = useState<string>("overview");
-
-  // Load saved language on mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("chiguru_lang") as Language;
-      if (saved && ["en", "kn", "tu", "hi"].includes(saved)) {
-        setLang(saved);
-      }
-    }
-  }, []);
-
-  const changeLanguage = (newLang: Language) => {
-    setLang(newLang);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("chiguru_lang", newLang);
-    }
-  };
-
-  // ==========================================
-  // EXPERIMENT STATE (RESEARCH CORE)
-  // ==========================================
-  const [activeExperiment, setActiveExperiment] = useState<Experiment>(PRIMARY_EXPERIMENT_001);
-  const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
-  const [spatialClusteringWarning, setSpatialClusteringWarning] = useState<string | null>(null);
-  const [isReportOpen, setIsReportOpen] = useState(false);
-  const [isJuryDemoOpen, setIsJuryDemoOpen] = useState(false);
-  const [activeScenarioNum, setActiveScenarioNum] = useState<number>(1);
-
-  // ==========================================
-  // HARDWARE TELEMETRY & WEB SERIAL PIPELINE
-  // ==========================================
-  const [mode, setMode] = useState<number>(1); // 0: STORAGE, 1: GERMINATION, 2: FIELD
-  const [telemetry, setTelemetry] = useState<TelemetryData>({
-    timestamp: new Date().toISOString(),
-    mode: 1,
-    temp1: 25.2,
-    hum1: 76.0,
-    temp2: 25.4,
-    hum2: 78.0,
-    soil1: 72,
-    soil2: 70,
-    gas: 38,
-    pump: 0,
-    fan: 0,
-    alert: 0,
-    reason: "EXPERIMENTAL PROTOCOL: CONTINUOUS SENSING ACTIVE",
-    is_hardware_live: false,
-  });
-
-  const [serialConnected, setSerialConnected] = useState(false);
-  const [portName, setPortName] = useState<string>("COM8");
-  const serialPortRef = useRef<any>(null);
-  const serialWriterRef = useRef<any>(null);
-
-  // Biological Profile & Controller States
-  const [selectedCrop, setSelectedCrop] = useState<CropType>("tomato");
-  const [selectedStage, setSelectedStage] = useState<GrowthStage>("germination");
-  const [activeProfile, setActiveProfile] = useState<PlantProfile>(() =>
-    getProfile("tomato", "germination")
-  );
-  const [cloudStatus, setCloudStatus] = useState<"connected" | "cached" | "offline">("connected");
-  const [isDemoMode, setIsDemoMode] = useState(false);
-  const [demoSensors, setDemoSensors] = useState<SensorState>({
-    temperature: 25.0,
-    humidity: 76.0,
-    moisture1: 72,
-    moisture2: 70,
-    gasPpm: 38,
-    lightLux: 10500,
-    isHardwareLive: false,
-  });
-  const [demoRecentIrrigation, setDemoRecentIrrigation] = useState(false);
-
-  const [actuatorHistory, setActuatorHistory] = useState<ActuatorHistory>({
-    isCurrentlyPumping: false,
-    pumpCycleCountToday: 2,
-    recentIrrigationWithinMinutes: false,
-    lastPumpStopTime: Date.now() - 40 * 60 * 1000,
-  });
-  const [decisionHistory, setDecisionHistory] = useState<DecisionResult[]>([]);
-  const lastPumpCmdRef = useRef<boolean>(false);
-
-  // Cleanly handle USB disconnects, brownouts, and suppress unhandled rejection overlay
-  useEffect(() => {
-    const handleDisconnect = () => {
-      console.warn("USB Serial hardware was disconnected or reset");
-      serialPortRef.current = null;
-      serialWriterRef.current = null;
-      setSerialConnected(false);
-      setPortName("Disconnected");
-    };
-
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      const msg = event?.reason?.message || String(event?.reason || "");
-      if (
-        msg.includes("device has been lost") ||
-        msg.includes("NetworkError") ||
-        event?.reason?.name === "NetworkError"
-      ) {
-        event.preventDefault();
-        handleDisconnect();
-      }
-    };
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("unhandledrejection", handleUnhandledRejection);
-      if ("serial" in navigator) {
-        (navigator as any).serial.addEventListener("disconnect", handleDisconnect);
-      }
-    }
-
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("unhandledrejection", handleUnhandledRejection);
-        if ("serial" in navigator) {
-          (navigator as any).serial.removeEventListener("disconnect", handleDisconnect);
-        }
-      }
-    };
-  }, []);
-
-  // Poll /api/telemetry continuously every 1.2s if not direct WebSerial
-  const fetchTelemetry = useCallback(async () => {
-    try {
-      const res = await fetch("/api/telemetry");
-      if (res.ok) {
-        const data = await res.json();
-        setTelemetry(data);
-        if (typeof data.mode === "number") {
-          setMode(data.mode);
-        }
-      }
-    } catch {
-      // Ignore network drop
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchTelemetry();
-    const interval = setInterval(() => {
-      if (!serialConnected) {
-        fetchTelemetry();
-      }
-    }, 1200);
-    return () => clearInterval(interval);
-  }, [fetchTelemetry, serialConnected]);
-
-  // Connect via Direct Browser Web Serial API (Chrome / Edge)
-  const connectWebSerial = async (): Promise<boolean> => {
-    if (typeof window === "undefined" || !("serial" in navigator)) {
-      alert("Web Serial API is not supported in this browser. Please use Google Chrome or Microsoft Edge.");
-      return false;
-    }
-
-    try {
-      const port = await (navigator as any).serial.requestPort();
-      await port.open({ baudRate: 115200 });
-      serialPortRef.current = port;
-
-      const textEncoder = new TextEncoderStream();
-      textEncoder.readable.pipeTo(port.writable).catch(() => {});
-      serialWriterRef.current = textEncoder.writable.getWriter();
-
-      setSerialConnected(true);
-      setPortName("USB Serial (Live)");
-
-      // Sync active protocol limits to Arduino
-      const syncCmd = `PROFILE,${activeProfile.crop.toUpperCase()},${activeProfile.stage.toUpperCase()},${activeProfile.environment.moisture.min},${activeProfile.environment.moisture.max},${activeProfile.environment.temperature.min},${activeProfile.environment.temperature.max},${activeProfile.environment.shade.target}\n`;
-      serialWriterRef.current.write(syncCmd).catch(() => {});
-
-      const textDecoder = new TextDecoderStream();
-      port.readable.pipeTo(textDecoder.writable).catch(() => {});
-      const reader = textDecoder.readable.getReader();
-
-      (async () => {
-        let buffer = "";
-        try {
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            if (value) {
-              buffer += value;
-              const lines = buffer.split("\n");
-              buffer = lines.pop() || "";
-              for (const line of lines) {
-                const parts = line.trim().split(",");
-                if (parts.length >= 11) {
-                  setTelemetry({
-                    timestamp: new Date().toISOString(),
-                    mode: parseInt(parts[0], 10) || 0,
-                    temp1: parseFloat(parts[1]) || 0,
-                    hum1: parseFloat(parts[2]) || 0,
-                    temp2: parseFloat(parts[3]) || 0,
-                    hum2: parseFloat(parts[4]) || 0,
-                    soil1: parseInt(parts[5], 10) || 0,
-                    soil2: parseInt(parts[6], 10) || 0,
-                    gas: parseInt(parts[7], 10) || 38,
-                    pump: parseInt(parts[8], 10) || 0,
-                    fan: parseInt(parts[9], 10) || 0,
-                    alert: parseInt(parts[10], 10) || 0,
-                    reason: parts[11]?.trim() || "SYS: OK",
-                    is_hardware_live: true,
-                  });
-                }
-              }
-            }
-          }
-        } catch {
-          // Stream reset
-        } finally {
-          try { await reader.cancel(); } catch {}
-          try { reader.releaseLock(); } catch {}
-          serialPortRef.current = null;
-          serialWriterRef.current = null;
-          setSerialConnected(false);
-          setPortName("Disconnected");
-        }
-      })();
-
-      return true;
-    } catch {
-      setSerialConnected(false);
-      return false;
-    }
-  };
-
-  // Dispatch command to hardware
-  const sendCommand = async (cmd: string): Promise<boolean> => {
-    if (serialWriterRef.current) {
-      try {
-        await serialWriterRef.current.write(cmd + "\n");
-      } catch {}
-    }
-    try {
-      const res = await fetch("/api/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: cmd }),
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  };
-
-  const handleModeChange = async (m: number) => {
-    setMode(m);
-    await sendCommand(`MODE:${m}`);
-  };
-
-  // ==========================================
-  // DECISION / CONTROLLER EVALUATION
-  // ==========================================
-  const currentSensorState: SensorState = isDemoMode
-    ? demoSensors
-    : {
-        temperature: telemetry.temp1 || 25,
-        humidity: telemetry.hum1 || 65,
-        moisture1: telemetry.soil1 || 50,
-        moisture2: telemetry.soil2 || 50,
-        gasPpm: telemetry.gas || 38,
-        lightLux: 10500,
-        isHardwareLive: Boolean(telemetry.is_hardware_live),
-      };
-
-  const currentDecision = evaluateDecision(
-    activeProfile,
-    currentSensorState,
-    {
-      ...actuatorHistory,
-      recentIrrigationWithinMinutes: isDemoMode ? demoRecentIrrigation : actuatorHistory.recentIrrigationWithinMinutes,
-    }
-  );
-
-  useEffect(() => {
-    setDecisionHistory((prev) => {
-      if (
-        prev.length === 0 ||
-        prev[0].reasonCode !== currentDecision.reasonCode ||
-        prev[0].irrigation !== currentDecision.irrigation
-      ) {
-        return [currentDecision, ...prev.slice(0, 19)];
-      }
-      return prev;
-    });
-
-    if (currentDecision.targetPumpState !== lastPumpCmdRef.current) {
-      lastPumpCmdRef.current = currentDecision.targetPumpState;
-      if (!isDemoMode) {
-        sendCommand(currentDecision.targetPumpState ? "PUMP:ON" : "PUMP:OFF");
-        sendCommand(`COVER:${currentDecision.targetServoAngle}`);
-      }
-    }
-  }, [currentDecision, isDemoMode]);
-
-  // ==========================================
-  // EXPERIMENT & TRAY OPERATIONS
-  // ==========================================
-  const handleRandomizeTreatments = () => {
-    const { cells: newCells, spatialClusteringWarning: warn } = generateRandomizedTreatmentMap(
-      activeExperiment.treatments,
-      activeExperiment.seedLotId,
-      activeExperiment.startDate
-    );
-    const updatedMetrics = calculateGerminationMetrics(newCells, activeExperiment.treatments);
-    setActiveExperiment((prev) => ({
-      ...prev,
-      cells: newCells,
-      metrics: updatedMetrics,
-      lastUpdatedTimestamp: new Date().toISOString(),
-    }));
-    setSpatialClusteringWarning(warn);
-  };
-
-  const handleSelectCell = (cell: CellData) => {
-    setSelectedCell(cell);
-  };
-
-  const handleNavigateCell = (delta: number) => {
-    if (!selectedCell) return;
-    const currentIdx = activeExperiment.cells.findIndex((c) => c.cellId === selectedCell.cellId);
-    if (currentIdx === -1) return;
-    const nextIdx = (currentIdx + delta + activeExperiment.cells.length) % activeExperiment.cells.length;
-    setSelectedCell(activeExperiment.cells[nextIdx]);
-  };
-
-  const handleSaveManualAnnotation = (cellId: string, annot: BiologicalEventState, note: string) => {
-    setActiveExperiment((prev) => {
-      const updatedCells = prev.cells.map((c) => {
-        if (c.cellId === cellId) {
-          return {
-            ...c,
-            manualAnnotation: annot,
-            annotationNotes: note,
-          };
-        }
-        return c;
-      });
-      return {
-        ...prev,
-        cells: updatedCells,
-      };
-    });
-    if (selectedCell && selectedCell.cellId === cellId) {
-      setSelectedCell((prev) => prev ? { ...prev, manualAnnotation: annot, annotationNotes: note } : null);
-    }
-  };
-
-  // Export dataset handler
-  const handleExportDataset = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(activeExperiment, null, 2));
-    const downloadAnchor = document.createElement("a");
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `${activeExperiment.id}_research_package.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  };
-
-  // Apply curated Jury Demonstration Scenario
-  const handleApplyScenario = (scenarioNum: number) => {
-    setActiveScenarioNum(scenarioNum);
-    if (scenarioNum === 1) {
-      // Scenario 1: Active Tomato Hydration Trial
-      setActiveExperiment(PRIMARY_EXPERIMENT_001);
-      setIsDemoMode(false);
-      setActiveTab("overview");
-    } else if (scenarioNum === 2) {
-      // Scenario 2: SeedGerm-VIG Cereal Public Benchmark Replay
-      setActiveExperiment(BENCHMARK_EXPERIMENT_002);
-      setIsDemoMode(false);
-      setActiveTab("tray");
-    } else if (scenarioNum === 3) {
-      // Scenario 3: Treatment Comparison
-      setActiveExperiment(PRIMARY_EXPERIMENT_001);
-      setIsDemoMode(false);
-      setActiveTab("analytics");
-    } else if (scenarioNum === 4) {
-      // Scenario 4: Closed-Loop Refusal Sandbox
-      setActiveExperiment(PRIMARY_EXPERIMENT_001);
-      setIsDemoMode(true);
-      setDemoSensors({
-        temperature: 25.0,
-        humidity: 92.0, // High RH
-        moisture1: 52,   // Low soil moisture
-        moisture2: 52,
-        gasPpm: 38,
-        lightLux: 9500,
-        isHardwareLive: false,
-      });
-      setDemoRecentIrrigation(true); // Recent irrigation flag -> Triggers refusal
-      setActiveTab("overview");
-    } else if (scenarioNum === 5) {
-      // Scenario 5: Sensor Fault & Data Gap Handling
-      setActiveExperiment(PRIMARY_EXPERIMENT_001);
-      setIsDemoMode(true);
-      setDemoSensors({
-        temperature: 25.0,
-        humidity: 75.0,
-        moisture1: 0,    // Fault / disconnected
-        moisture2: 0,
-        gasPpm: 38,
-        lightLux: 9500,
-        isHardwareLive: false,
-      });
-      setActiveTab("calibration");
-    }
-  };
+export default function LandingPage() {
+  const { user } = useAuth();
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FAFC]">
-      
-      {/* 1. Scientific Research Navigation Bar */}
-      <ResearchNavbar
-        lang={lang}
-        setLang={changeLanguage}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        dataClass={activeExperiment.dataClass}
-        activeExperimentId={activeExperiment.id}
-        activeCropName={activeExperiment.scientificName}
-        isHardwareLive={Boolean(telemetry.is_hardware_live)}
-        serialConnected={serialConnected}
-        onConnectSerial={connectWebSerial}
-        onRefresh={fetchTelemetry}
-        onOpenReport={() => setIsReportOpen(true)}
-        onOpenJuryDemo={() => setIsJuryDemoOpen(true)}
-      />
+    <div className="min-h-screen bg-[#F8FAF6] text-[#1E3A2B] selection:bg-[#52B788]/20 selection:text-[#163828]">
+      {/* 1. Global Navigation Bar */}
+      <header className="sticky top-0 z-50 border-b border-[#E2E8DC]/80 bg-white/85 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2D6A4F] text-white shadow-sm">
+              <Sprout className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg font-black tracking-tight text-[#163828]">
+                  CHIGURU
+                </span>
+                <span className="text-xs font-semibold text-[#52796F]">
+                  ಚಿಗುರು
+                </span>
+              </div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-[#4A6B5D]">
+                Seed & Seedling Research Platform
+              </p>
+            </div>
+          </Link>
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* 2. Permanent Experiment Header & Primary Metrics */}
-        <ExperimentHeader
-          experiment={activeExperiment}
-          onOpenNewExperiment={() => alert("New experiment creation protocol loaded. Use template wizard.")}
-          onExportDataset={handleExportDataset}
-          onOpenReport={() => setIsReportOpen(true)}
-          onSelectMetricProvenance={(metric) => {
-            setActiveTab("evidence");
-          }}
-        />
+          <nav className="hidden items-center gap-7 text-xs font-semibold text-[#4A6B5D] md:flex">
+            <a href="#problem" className="hover:text-[#163828] transition-colors">
+              The Problem
+            </a>
+            <a href="#how-it-works" className="hover:text-[#163828] transition-colors">
+              How it Works
+            </a>
+            <a href="#research" className="hover:text-[#163828] transition-colors">
+              Research
+            </a>
+            <a href="#technology" className="hover:text-[#163828] transition-colors">
+              Technology
+            </a>
+            <Link href="/sources" className="hover:text-[#163828] transition-colors">
+              Evidence & Sources
+            </Link>
+          </nav>
 
-        {/* 3. Tab Content Engine */}
-
-        {/* TAB A: OVERVIEW (Full Integrated Research Console) */}
-        {activeTab === "overview" && (
-          <div className="space-y-8">
-            
-            {/* Signature Component #1: 40-Cell Tray Digital Twin */}
-            <DigitalTwinTray
-              cells={activeExperiment.cells}
-              treatments={activeExperiment.treatments}
-              selectedCellId={selectedCell?.cellId || null}
-              onSelectCell={handleSelectCell}
-              onRandomizeTreatments={handleRandomizeTreatments}
-              spatialClusteringWarning={spatialClusteringWarning}
-            />
-
-            {/* Signature Component #2: Exposure ↔ Response Synchronized Analytics */}
-            <ExposureResponseAnalytics experiment={activeExperiment} />
-
-            {/* Closed-Loop Experimental Environment Controller */}
-            <CropAdaptiveControl
-              lang={lang}
-              activeProfile={activeProfile}
-              onSelectCrop={(c) => setSelectedCrop(c)}
-              onSelectStage={(s) => setSelectedStage(s)}
-              decision={currentDecision}
-              cloudStatus={cloudStatus}
-              lastSyncTime={new Date().toISOString()}
-              onToggleCloudSim={() => {}}
-              isDemoMode={isDemoMode}
-              onToggleDemoMode={(v) => setIsDemoMode(v)}
-              demoSensors={demoSensors}
-              onUpdateDemoSensors={(p) => setDemoSensors((prev) => ({ ...prev, ...p }))}
-              demoRecentIrrigation={demoRecentIrrigation}
-              onToggleDemoRecentIrrigation={(v) => setDemoRecentIrrigation(v)}
-              decisionHistory={decisionHistory}
-              onApplyPresetScenario={(num) => handleApplyScenario(num)}
-            />
-
-            {/* Micro-Environment Telemetry & Actuator Hardware */}
-            <SensorGrid
-              lang={lang}
-              soil1={isDemoMode ? demoSensors.moisture1 : telemetry.soil1}
-              soil2={isDemoMode ? demoSensors.moisture2 : telemetry.soil2}
-              temp1={isDemoMode ? demoSensors.temperature : telemetry.temp1}
-              hum1={isDemoMode ? demoSensors.humidity : telemetry.hum1}
-              temp2={telemetry.temp2}
-              hum2={telemetry.hum2}
-              gas={telemetry.gas}
-              alert={telemetry.alert}
-              mode={mode}
-            />
-
-            {/* Actuators: Submersible Pump, Louver Servos & CLD8025SH Chamber Fan */}
-            <ActuatorControls
-              lang={lang}
-              pumpState={isDemoMode ? (currentDecision.targetPumpState ? 1 : 0) : telemetry.pump}
-              fanState={telemetry.fan}
-              onSendCommand={sendCommand}
-            />
-
-            {/* 3D CAD Enclosure Model */}
-            <CadViewer lang={lang} />
-
-          </div>
-        )}
-
-        {/* TAB B: 40-CELL TRAY DIGITAL TWIN */}
-        {activeTab === "tray" && (
-          <div className="space-y-8">
-            <DigitalTwinTray
-              cells={activeExperiment.cells}
-              treatments={activeExperiment.treatments}
-              selectedCellId={selectedCell?.cellId || null}
-              onSelectCell={handleSelectCell}
-              onRandomizeTreatments={handleRandomizeTreatments}
-              spatialClusteringWarning={spatialClusteringWarning}
-            />
-          </div>
-        )}
-
-        {/* TAB C: EXPOSURE ↔ RESPONSE */}
-        {activeTab === "analytics" && (
-          <div className="space-y-8">
-            <ExposureResponseAnalytics experiment={activeExperiment} />
-          </div>
-        )}
-
-        {/* TAB D: TREATMENT ANALYSIS */}
-        {activeTab === "treatments" && (
-          <div className="space-y-8">
-            <ExposureResponseAnalytics experiment={activeExperiment} />
-          </div>
-        )}
-
-        {/* TAB E: MICRO-ENVIRONMENT */}
-        {activeTab === "sensors" && (
-          <div className="space-y-8">
-            <SensorGrid
-              lang={lang}
-              soil1={isDemoMode ? demoSensors.moisture1 : telemetry.soil1}
-              soil2={isDemoMode ? demoSensors.moisture2 : telemetry.soil2}
-              temp1={isDemoMode ? demoSensors.temperature : telemetry.temp1}
-              hum1={isDemoMode ? demoSensors.humidity : telemetry.hum1}
-              temp2={telemetry.temp2}
-              hum2={telemetry.hum2}
-              gas={telemetry.gas}
-              alert={telemetry.alert}
-              mode={mode}
-            />
-            <ActuatorControls
-              lang={lang}
-              pumpState={isDemoMode ? (currentDecision.targetPumpState ? 1 : 0) : telemetry.pump}
-              fanState={telemetry.fan}
-              onSendCommand={sendCommand}
-            />
-          </div>
-        )}
-
-        {/* TAB F: SENSOR CALIBRATION CENTER */}
-        {activeTab === "calibration" && (
-          <div className="space-y-8">
-            <SensorCalibrationCenter
-              soil1={isDemoMode ? demoSensors.moisture1 : telemetry.soil1}
-              soil2={isDemoMode ? demoSensors.moisture2 : telemetry.soil2}
-              temp={isDemoMode ? demoSensors.temperature : telemetry.temp1}
-              hum={isDemoMode ? demoSensors.humidity : telemetry.hum1}
-              gas={telemetry.gas}
-            />
-          </div>
-        )}
-
-        {/* TAB G: EVIDENCE & CITATIONS */}
-        {activeTab === "evidence" && (
-          <div className="space-y-8">
-            <DataProvenanceEvidence />
-          </div>
-        )}
-
-        {/* TAB H: PUBLIC DATA EXPLORER */}
-        {activeTab === "publicdata" && (
-          <div className="space-y-8">
-            <PublicDataExplorer />
-          </div>
-        )}
-
-      </main>
-
-      {/* Signature Component Drawer: Cell Digital Twin Research Inspector */}
-      {selectedCell && (
-        <CellResearchDrawer
-          cell={selectedCell}
-          treatments={activeExperiment.treatments}
-          onClose={() => setSelectedCell(null)}
-          onNavigateCell={handleNavigateCell}
-          onSaveManualAnnotation={handleSaveManualAnnotation}
-        />
-      )}
-
-      {/* Automated Research Report Modal */}
-      <ResearchReportModal
-        experiment={activeExperiment}
-        isOpen={isReportOpen}
-        onClose={() => setIsReportOpen(false)}
-      />
-
-      {/* 3-Minute Jury Demonstration Controller Modal */}
-      <JuryDemoController
-        isOpen={isJuryDemoOpen}
-        onClose={() => setIsJuryDemoOpen(false)}
-        onApplyScenario={handleApplyScenario}
-        activeScenarioNum={activeScenarioNum}
-      />
-
-      {/* Research Footer */}
-      <footer className="w-full border-t border-[#E2E8F0] bg-white py-6 mt-12 text-xs text-[#64748B]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <strong className="text-[#0F291E]">CHIGURU 2.0</strong>
-            <span>—</span>
-            <span>Intelligent Seed & Seedling Research Platform</span>
-            <span>•</span>
-            <span>Team TerraByte</span>
-          </div>
-
-          <div className="flex items-center gap-4 text-[11px] font-mono">
-            <span>Yenepoya Institute of Technology, Moodbidri</span>
-            <span>•</span>
-            <span className="text-[#059669] font-bold">YEN NOVA 1.0</span>
+          <div className="flex items-center gap-3">
+            {user ? (
+              <Link
+                href="/monitor/CHG-EXP-2026-001"
+                className="flex items-center gap-1.5 rounded-lg border border-[#2D6A4F] bg-[#2D6A4F] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#1B4332] transition-colors"
+              >
+                <span>Open Active Monitor</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="rounded-lg px-3.5 py-1.5 text-xs font-bold text-[#2D6A4F] hover:bg-[#E8F7EC] transition-colors"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/monitor/new"
+                  className="flex items-center gap-1.5 rounded-lg border border-[#2D6A4F] bg-[#2D6A4F] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#1B4332] transition-colors"
+                >
+                  <span>Start Monitoring</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </>
+            )}
           </div>
         </div>
-      </footer>
+      </header>
 
+      {/* 2. Hero Section */}
+      <section className="relative overflow-hidden pt-12 pb-20 md:pt-20 md:pb-28">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-12">
+            {/* Left Headline Column */}
+            <div className="lg:col-span-6">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#52B788]/30 bg-[#E8F7EC] px-3.5 py-1 text-xs font-semibold text-[#1E4D36]">
+                <span className="h-2 w-2 rounded-full bg-[#2D6A4F] animate-pulse" />
+                YEN NOVA 1.0 • Yenepoya Institute of Technology
+              </div>
+
+              <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-[#163828] sm:text-5xl lg:text-6xl">
+                See the seed <br />
+                <span className="text-[#2D6A4F]">become a seedling.</span>
+              </h1>
+
+              <p className="mt-5 text-base leading-relaxed text-[#4A6B5D] sm:text-lg">
+                An intelligent seed and seedling monitoring platform that combines
+                environmental sensing, computer vision and scientific data to follow plant development from seed to sprout.
+              </p>
+
+              {/* Exact Product Statement */}
+              <div className="mt-6 rounded-xl border border-[#D8F3DC] bg-[#E8F7EC]/60 p-4">
+                <p className="text-xs font-bold text-[#163828] leading-relaxed">
+                  “CHIGURU transforms a nursery tray into a living digital record —
+                  connecting what a seed experiences with what a camera observes.”
+                </p>
+                <p className="mt-1 text-[11px] font-medium text-[#2D6A4F]">
+                  Select a seed. Start monitoring. Let Chiguru build the story.
+                </p>
+              </div>
+
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <Link
+                  href="/monitor/new"
+                  className="flex items-center gap-2 rounded-xl border border-[#2D6A4F] bg-[#2D6A4F] px-6 py-3.5 text-sm font-bold text-white shadow-md hover:bg-[#1B4332] hover:shadow-lg transition-all"
+                >
+                  <span>START MONITORING</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+
+                <a
+                  href="#how-it-works"
+                  className="rounded-xl border border-[#D1D5DB] bg-white px-5 py-3.5 text-sm font-bold text-[#163828] hover:bg-[#F3F4F6] transition-colors"
+                >
+                  EXPLORE CHIGURU
+                </a>
+              </div>
+
+              {/* Micro Confidence Callout */}
+              <div className="mt-8 flex items-center gap-6 text-xs text-[#52796F]">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-[#2D6A4F]" />
+                  <span>40-Cell Persistent Identity</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-[#2D6A4F]" />
+                  <span>Zero Fabricated Data</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-[#2D6A4F]" />
+                  <span>Literature-Backed Context</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Hero Visualization Column */}
+            <div className="lg:col-span-6">
+              <LandingHeroTray />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Section: THE PROBLEM */}
+      <section id="problem" className="border-t border-[#E2E8DC] bg-white py-16">
+        <div className="mx-auto max-w-5xl px-6 text-center">
+          <span className="text-xs font-bold uppercase tracking-wider text-[#2D6A4F]">
+            The Problem
+          </span>
+          <h2 className="mt-2 text-2xl font-bold text-[#163828] sm:text-3xl">
+            Most seed monitoring is manual, periodic and disconnected from environmental history.
+          </h2>
+          <p className="mt-4 text-sm leading-relaxed text-[#4A6B5D] max-w-3xl mx-auto">
+            Traditional nursery evaluations rely on sporadic visual inspection. When an individual seed fails to germinate or shows delayed vigor, researchers cannot answer the central question: <em>What specific microclimate spike or moisture deficit did this exact cell experience in the 72 hours prior to emergence?</em>
+          </p>
+
+          <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-3 text-left">
+            <div className="rounded-xl border border-[#E2E8DC] bg-[#F8FAF6] p-5">
+              <div className="text-xs font-mono font-bold text-[#B45309]">01. DISCONNECTED TELEMETRY</div>
+              <h3 className="mt-2 text-sm font-bold text-[#163828]">Bulk Chamber Averages</h3>
+              <p className="mt-1 text-xs text-[#4A6B5D] leading-relaxed">
+                Single ambient sensors miss spatial gradients across the tray, masking moisture skews between edge and center cells.
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#E2E8DC] bg-[#F8FAF6] p-5">
+              <div className="text-xs font-mono font-bold text-[#B45309]">02. SUBJECTIVE SAMPLING</div>
+              <h3 className="mt-2 text-sm font-bold text-[#163828]">Infrequent Manual Checks</h3>
+              <p className="mt-1 text-xs text-[#4A6B5D] leading-relaxed">
+                Human counts once a day miss exact emergence hours ($T_{50}$) and fail to capture transient cotyledon expansion kinetics.
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#E2E8DC] bg-[#F8FAF6] p-5">
+              <div className="text-xs font-mono font-bold text-[#B45309]">03. UNREPRODUCIBLE DATA</div>
+              <h3 className="mt-2 text-sm font-bold text-[#163828]">Lost Experimental Lineage</h3>
+              <p className="mt-1 text-xs text-[#4A6B5D] leading-relaxed">
+                Actuator events (irrigation pulses, ventilation cycles) are rarely time-synchronized with raw visual time-lapse evidence.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Section: THE IDEA */}
+      <section className="border-t border-[#E2E8DC] bg-[#E8F7EC]/30 py-16">
+        <div className="mx-auto max-w-5xl px-6 text-center">
+          <span className="text-xs font-bold uppercase tracking-wider text-[#2D6A4F]">
+            The Idea
+          </span>
+          <h2 className="mt-2 text-2xl font-bold text-[#163828] sm:text-3xl">
+            Chiguru connects what the seed experiences with what the camera observes.
+          </h2>
+          <p className="mt-4 text-sm leading-relaxed text-[#4A6B5D] max-w-3xl mx-auto">
+            By fusing continuous microclimate acquisition with cell-level computer vision, CHIGURU creates an unbroken temporal audit trail for all 40 cells in a standard nursery tray.
+          </p>
+
+          <div className="mt-10 rounded-2xl border border-[#D8F3DC] bg-white p-6 shadow-sm">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#E8EDE2]">
+              <div className="p-3 text-center">
+                <div className="text-2xl font-black text-[#2D6A4F]">40</div>
+                <div className="text-xs font-semibold text-[#163828] mt-1">Cell Digital Twins</div>
+                <div className="text-[11px] text-[#52796F]">Individual C01-C40 lineage</div>
+              </div>
+              <div className="p-3 text-center">
+                <div className="text-2xl font-black text-[#2D6A4F]">Hourly</div>
+                <div className="text-xs font-semibold text-[#163828] mt-1">Time-Lapse Phenotyping</div>
+                <div className="text-[11px] text-[#52796F]">ExG = 2G − R − B segmentation</div>
+              </div>
+              <div className="p-3 text-center">
+                <div className="text-2xl font-black text-[#2D6A4F]">2-Point</div>
+                <div className="text-xs font-semibold text-[#163828] mt-1">Substrate Index (SMI)</div>
+                <div className="text-[11px] text-[#52796F]">Calibrated capacitive metrology</div>
+              </div>
+              <div className="p-3 text-center">
+                <div className="text-2xl font-black text-[#2D6A4F]">Zero</div>
+                <div className="text-xs font-semibold text-[#163828] mt-1">Fabricated Data</div>
+                <div className="text-[11px] text-[#52796F]">Strict scientific provenance</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Section: HOW IT WORKS */}
+      <section id="how-it-works" className="border-t border-[#E2E8DC] bg-white py-16">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="text-center">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#2D6A4F]">
+              Workflow
+            </span>
+            <h2 className="mt-2 text-2xl font-bold text-[#163828] sm:text-3xl">
+              From Seed to Scientific Evidence in 4 Steps
+            </h2>
+            <div className="mt-4 flex items-center justify-center gap-3 text-xs font-mono font-bold text-[#2D6A4F]">
+              <span>SEED</span>
+              <span>→</span>
+              <span>SENSE</span>
+              <span>→</span>
+              <span>SEE</span>
+              <span>→</span>
+              <span>UNDERSTAND</span>
+            </div>
+          </div>
+
+          <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Step 1 */}
+            <div className="rounded-2xl border border-[#E2E8DC] bg-[#F8FAF6] p-6 transition-all hover:border-[#74C69D] hover:shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2D6A4F]/10 text-[#2D6A4F] font-bold">
+                1
+              </div>
+              <h3 className="mt-4 text-base font-bold text-[#163828]">Select the Seed</h3>
+              <p className="mt-2 text-xs leading-relaxed text-[#4A6B5D]">
+                Choose Tomato, Chilli, Capsicum, Brinjal, or Cabbage. CHIGURU instantly loads peer-reviewed biological profiles with germination temperature, RH, and Substrate Moisture Index ranges.
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div className="rounded-2xl border border-[#E2E8DC] bg-[#F8FAF6] p-6 transition-all hover:border-[#74C69D] hover:shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2D6A4F]/10 text-[#2D6A4F] font-bold">
+                2
+              </div>
+              <h3 className="mt-4 text-base font-bold text-[#163828]">Continuous Sensing</h3>
+              <p className="mt-2 text-xs leading-relaxed text-[#4A6B5D]">
+                Dual calibrated soil probes, DHT22 sensors, and MQ135 monitor substrate moisture, vapor pressure deficit, and temperature. Actuators provide micro-pulsed hydration and chamber airflow.
+              </p>
+            </div>
+
+            {/* Step 3 */}
+            <div className="rounded-2xl border border-[#E2E8DC] bg-[#F8FAF6] p-6 transition-all hover:border-[#74C69D] hover:shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2D6A4F]/10 text-[#2D6A4F] font-bold">
+                3
+              </div>
+              <h3 className="mt-4 text-base font-bold text-[#163828]">Computer Vision</h3>
+              <p className="mt-2 text-xs leading-relaxed text-[#4A6B5D]">
+                Overhead gantry camera executes automated perspective correction, 40-cell grid alignment, and Excess Green ($2G - R - B$) segmentation to extract canopy area and flag emergence.
+              </p>
+            </div>
+
+            {/* Step 4 */}
+            <div className="rounded-2xl border border-[#E2E8DC] bg-[#F8FAF6] p-6 transition-all hover:border-[#74C69D] hover:shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2D6A4F]/10 text-[#2D6A4F] font-bold">
+                4
+              </div>
+              <h3 className="mt-4 text-base font-bold text-[#163828]">AI-Assisted Evidence</h3>
+              <p className="mt-2 text-xs leading-relaxed text-[#4A6B5D]">
+                Exposure $\leftrightarrow$ Response analytics link environmental fluctuations with growth trajectories. Server-side Gemini provides explainable biological interpretations without black-box claims.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. Section: RESEARCH READY */}
+      <section id="research" className="border-t border-[#E2E8DC] bg-[#F8FAF6] py-16">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-12">
+            <div className="lg:col-span-6">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#2D6A4F]">
+                Research Ready
+              </span>
+              <h2 className="mt-2 text-2xl font-bold text-[#163828] sm:text-3xl">
+                Rigorous seed-science metrology underneath an effortless interface.
+              </h2>
+              <p className="mt-4 text-sm leading-relaxed text-[#4A6B5D]">
+                CHIGURU implements standard seed-science mathematical formulations, eliminating guesswork while adhering to strict academic integrity standards:
+              </p>
+
+              <div className="mt-6 space-y-3.5">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-md bg-[#2D6A4F]/10 p-1 text-[#2D6A4F]">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-[#163828]">Mean Germination Time (MGT)</h4>
+                    <p className="text-xs text-[#52796F]">
+                      Computed using literature formulation: MGT = Σ(nᵢ × tᵢ) / Σnᵢ.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-md bg-[#2D6A4F]/10 p-1 text-[#2D6A4F]">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-[#163828]">T₅₀ with Linear Interpolation</h4>
+                    <p className="text-xs text-[#52796F]">
+                      Interpolates exact midpoint emergence hours rather than relying on discrete observation step rounding.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-md bg-[#2D6A4F]/10 p-1 text-[#2D6A4F]">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-[#163828]">Randomized Treatment Allocation</h4>
+                    <p className="text-xs text-[#52796F]">
+                      Balanced replication with spatial clustering bias detection across tray quadrants to eliminate edge effects.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-md bg-[#2D6A4F]/10 p-1 text-[#2D6A4F]">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-[#163828]">One-Click Research Dataset Export</h4>
+                    <p className="text-xs text-[#52796F]">
+                      Export complete experimental bundles including CSVs, raw images, calibration JSON, and automated PDF reports.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <Link
+                  href="/sources"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[#2D6A4F] hover:underline"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  <span>Explore Literature References (SeedGerm, SeedGerm-VIG, PlantCV)</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* Scientific Evidence Preview Card */}
+            <div className="lg:col-span-6">
+              <div className="rounded-2xl border border-[#E2E8DC] bg-white p-6 shadow-md">
+                <div className="flex items-center justify-between border-b border-[#F0F4EC] pb-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#52796F]">
+                      Active Experiment
+                    </span>
+                    <h3 className="text-sm font-bold text-[#163828]">
+                      CHG-EXP-2026-001 (Tomato Hydration Gradient)
+                    </h3>
+                  </div>
+                  <span className="rounded-full border border-[#2D6A4F]/30 bg-[#E8F7EC] px-2.5 py-0.5 text-[10px] font-bold text-[#2D6A4F]">
+                    MEASURED • LIVE HARDWARE
+                  </span>
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-3">
+                  <div className="rounded-xl border border-[#E2E8DC] bg-[#F8FAF6] p-3 text-center">
+                    <div className="text-[10px] text-[#6C757D]">Final Germination</div>
+                    <div className="text-lg font-black text-[#2D6A4F]">87.5%</div>
+                    <div className="text-[9px] text-[#52796F]">35 / 40 Cells</div>
+                  </div>
+                  <div className="rounded-xl border border-[#E2E8DC] bg-[#F8FAF6] p-3 text-center">
+                    <div className="text-[10px] text-[#6C757D]">MGT (Mean Time)</div>
+                    <div className="text-lg font-black text-[#163828]">48.2h</div>
+                    <div className="text-[9px] text-[#52796F]">Mean Germ Time</div>
+                  </div>
+                  <div className="rounded-xl border border-[#E2E8DC] bg-[#F8FAF6] p-3 text-center">
+                    <div className="text-[10px] text-[#6C757D]">T₅₀ Interpolated</div>
+                    <div className="text-lg font-black text-[#163828]">42.0h</div>
+                    <div className="text-[9px] text-[#52796F]">Midpoint Emergence</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-[#E8EDE2] bg-[#F8FAF6] p-3.5 text-xs">
+                  <div className="font-semibold text-[#163828] flex items-center justify-between">
+                    <span>Statistical Honesty Policy</span>
+                    <span className="font-mono text-[10px] text-[#D97706]">n = 10 / treatment</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-[#4A6B5D] leading-relaxed">
+                    “Descriptive comparison only — replicate sample size ($n=10$) is appropriate for nursery pilot observation but insufficient for inferential ANOVA significance testing.”
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. Section: TECHNOLOGY & HARDWARE INTEGRATION */}
+      <section id="technology" className="border-t border-[#E2E8DC] bg-white py-16">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="text-center max-w-3xl mx-auto">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#2D6A4F]">
+              Hardware Architecture
+            </span>
+            <h2 className="mt-2 text-2xl font-bold text-[#163828] sm:text-3xl">
+              Precision Cyber-Physical Nursery Gantry
+            </h2>
+            <p className="mt-3 text-sm text-[#4A6B5D]">
+              Physical Arduino Uno gantry paired with Web Serial API (115200 baud) and low-latency computer vision.
+            </p>
+          </div>
+
+          <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-[#E2E8DC] bg-[#F8FAF6] p-5">
+              <Cpu className="h-6 w-6 text-[#2D6A4F]" />
+              <h3 className="mt-3 text-sm font-bold text-[#163828]">Arduino Uno Controller</h3>
+              <p className="mt-1 text-xs text-[#52796F] leading-relaxed">
+                Deterministic hardware acquisition. D2/D3 DHT22, A0/A1 capacitive probes, A2 MQ135 VOC proxy, A5 fan driver, D13 relay.
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#E2E8DC] bg-[#F8FAF6] p-5">
+              <Eye className="h-6 w-6 text-[#2D6A4F]" />
+              <h3 className="mt-3 text-sm font-bold text-[#163828]">420mm Overhead RGB</h3>
+              <p className="mt-1 text-xs text-[#52796F] leading-relaxed">
+                Fixed-focus optical gantry capturing non-destructive cotyledon canopy development without disturbing substrate.
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#E2E8DC] bg-[#F8FAF6] p-5">
+              <Activity className="h-6 w-6 text-[#2D6A4F]" />
+              <h3 className="mt-3 text-sm font-bold text-[#163828]">CLD8025SH Chamber Fan</h3>
+              <p className="mt-1 text-xs text-[#52796F] leading-relaxed">
+                Dedicated 12V airflow actuator on pin A5 via MOSFET driver for humidity boundary layer disruption and thermal relief.
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#E2E8DC] bg-[#F8FAF6] p-5">
+              <ShieldCheck className="h-6 w-6 text-[#2D6A4F]" />
+              <h3 className="mt-3 text-sm font-bold text-[#163828]">Intelligent Refusal Engine</h3>
+              <p className="mt-1 text-xs text-[#52796F] leading-relaxed">
+                Action withholding under high RH + recent pulse cooldowns to mitigate hypoxia and Pythium damping-off vulnerability.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 8. Final CTA Section */}
+      <section className="border-t border-[#E2E8DC] bg-[#163828] py-20 text-white">
+        <div className="mx-auto max-w-4xl px-6 text-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-[#74C69D]">
+            <Sprout className="h-3.5 w-3.5" />
+            Begin Seedling Observation
+          </span>
+
+          <h2 className="mt-4 text-3xl font-extrabold sm:text-4xl lg:text-5xl">
+            Start observing.
+          </h2>
+
+          <p className="mt-4 text-base text-[#D8F3DC]/80 max-w-2xl mx-auto">
+            Turn your nursery seedling tray into a programmable, continuously monitored biological experiment.
+          </p>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+            <Link
+              href="/monitor/new"
+              className="flex items-center gap-2 rounded-xl bg-[#52B788] px-7 py-3.5 text-sm font-bold text-[#0F291E] shadow-lg hover:bg-[#74C69D] transition-all"
+            >
+              <span>START MONITORING</span>
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+
+            <Link
+              href="/sources"
+              className="rounded-xl border border-white/20 bg-white/5 px-6 py-3.5 text-sm font-bold text-white hover:bg-white/10 transition-colors"
+            >
+              VIEW EVIDENCE & BENCHMARKS
+            </Link>
+          </div>
+
+          <p className="mt-8 text-xs text-white/50">
+            Open-source cyber-physical platform developed by Team TerraByte • Yenepoya Institute of Technology, Moodbidri
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

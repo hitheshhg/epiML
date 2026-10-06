@@ -9,9 +9,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Chiguru • ಚಿಗುರು | Autonomous Smart Agri-CPS",
-  description: "Next-Generation Autonomous Agri-Cyber-Physical System & Real-Time Seed Phenotyping Dashboard by Team TerraByte",
+  title: "CHIGURU • ಚಿಗುರು | Intelligent Seed & Seedling Monitoring Platform",
+  description: "See the seed become a seedling. Low-cost cyber-physical research platform for seed monitoring, cell-level phenotyping, and environmental exposure analysis by Team TerraByte.",
 };
+
+import { AuthProvider } from "../context/AuthContext";
 
 export default function RootLayout({
   children,
@@ -24,7 +26,7 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" sizes="any" />
       </head>
       <body className="min-h-screen bg-[#F8FAF6] text-[#1E3A2B] selection:bg-[#52B788]/20 selection:text-[#163828]">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

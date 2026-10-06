@@ -104,10 +104,10 @@ export default function SeedMonitor({ lang }: SeedMonitorProps) {
             <span>Computer Vision Phenotyping</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold text-[#163828]">
-            {t.seedMonitoring}
+            {(t as any).seedMonitoring || "Seed & Seedling Phenotyping"}
           </h2>
           <p className="text-xs text-[#52796F] mt-0.5">
-            {t.seedSubheading}
+            {(t as any).seedSubheading || "High-Throughput Optical Growth Quantification"}
           </p>
         </div>
 
