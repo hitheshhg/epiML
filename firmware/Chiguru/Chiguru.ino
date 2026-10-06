@@ -80,6 +80,7 @@ const unsigned long OVERWATER_LIMIT_MS = 60000UL;   // 60s saturation warning
 // Active-LOW relay configuration (toggleable via INV serial command)
 bool RELAY_ACTIVE_LOW = true;
 bool manual_pump_override = false;
+bool manual_vent_override = false;
 
 // ==========================================
 // SYSTEM STATE VARIABLES
@@ -156,7 +157,7 @@ void updateVent(int targetAngle) {
     vent_angle = targetAngle;
     vent.attach(SERVO1);
     vent.write(vent_angle);
-    delay(100);
+    delay(350);
     vent.detach(); // Detach to save power & avoid jitter
   }
 }
@@ -167,7 +168,7 @@ void updateCover(int targetAngle) {
     cover_angle = targetAngle;
     cover.attach(SERVO2);
     cover.write(cover_angle);
-    delay(100);
+    delay(350);
     cover.detach();
   }
 }
@@ -267,7 +268,9 @@ void evaluateStorage() {
   if (!manual_pump_override) {
     setPump(false);
   }
-  updateVent(0);
+  if (!manual_vent_override) {
+    updateVent(0);
+  }
 
   bool temp_alert = (dht1_ok && T1 > STORAGE_TEMP_ALERT);
   bool humid_alert = (dht1_ok && H1 > STORAGE_HUMID_ALERT);
@@ -356,21 +359,23 @@ void evaluateGermination() {
   }
 
   // 5. Vent Proportional Control with "Know When Not To Act" Refusal
-  if (dht2_ok && T2 > GERM_VENT_TEMP) {
-    // If outside is damper than tray, opening vent introduces dampness!
-    if (dht1_ok && H1 > (H2 + 6.0) && H1 > 75.0) {
-      updateVent(0);
-      snprintf(reason_str, sizeof(reason_str), "VENT BLOCKED:OUTSIDE DAMP");
-    } else {
-      float excess = T2 - GERM_VENT_TEMP;
-      int targetA = constrain((int)(excess * 15.0), 0, 90);
-      updateVent(targetA);
-      if (!pump_state && !alert_state) {
-        snprintf(reason_str, sizeof(reason_str), "VENT ON T2>32C");
+  if (!manual_vent_override) {
+    if (dht2_ok && T2 > GERM_VENT_TEMP) {
+      // If outside is damper than tray, opening vent introduces dampness!
+      if (dht1_ok && H1 > (H2 + 6.0) && H1 > 75.0) {
+        updateVent(0);
+        snprintf(reason_str, sizeof(reason_str), "VENT BLOCKED:OUTSIDE DAMP");
+      } else {
+        float excess = T2 - GERM_VENT_TEMP;
+        int targetA = constrain((int)(excess * 15.0), 0, 90);
+        updateVent(targetA);
+        if (!pump_state && !alert_state) {
+          snprintf(reason_str, sizeof(reason_str), "VENT ON T2>32C");
+        }
       }
+    } else {
+      updateVent(0);
     }
-  } else {
-    updateVent(0);
   }
 }
 
@@ -442,8 +447,26 @@ void handleAlerts() {
     }
   } else {
     digitalWrite(SLED, LOW);
-    digitalWrite(BUZZ, LOW);
     buzzer_silenced = false;
+
+    // Bench Test / Moisture Indicator Beep:
+    // When either probe detects high moisture (>= 50%), chirp every 1 second
+    static unsigned long last_wet_beep = 0;
+    if ((m1_ok && M1_idx >= 50) || (m2_ok && M2_idx >= 50)) {
+      if (millis() - last_wet_beep >= 1000) {
+        last_wet_beep = millis();
+        digitalWrite(BUZZ, HIGH);
+        delay(130);
+        digitalWrite(BUZZ, LOW);
+        Serial.print(F(">> [MOISTURE HIGH] M1="));
+        Serial.print(M1_idx);
+        Serial.print(F("% M2="));
+        Serial.print(M2_idx);
+        Serial.println(F("% -> WET DETECTED! (BEEP!)"));
+      }
+    } else {
+      digitalWrite(BUZZ, LOW);
+    }
   }
 }
 
@@ -515,7 +538,7 @@ void parseSerialCommands() {
         int targetMode = cmdBuffer.substring(5).toInt();
         if (targetMode >= 0 && targetMode <= 2) {
           mode = (uint8_t)targetMode;
-          soundBeeps(mode + 1, 50);
+          soundBeeps(mode + 1, 140);
           lcd.clear();
           lcd.setCursor(0, 0);
           lcd.print("REMOTE COMMAND:");
@@ -537,6 +560,21 @@ void parseSerialCommands() {
         digitalWrite(RELAY, pump_state ? (RELAY_ACTIVE_LOW ? LOW : HIGH) : (RELAY_ACTIVE_LOW ? HIGH : LOW));
         Serial.print(F(">> [RELAY] POLARITY INVERTED! ACTIVE_LOW="));
         Serial.println(RELAY_ACTIVE_LOW ? F("TRUE") : F("FALSE"));
+      } else if (cmdBuffer.startsWith("VENT:")) {
+        int ang = cmdBuffer.substring(5).toInt();
+        manual_vent_override = (ang > 0);
+        updateVent(ang);
+        Serial.print(F(">> [SERVO 1] VENT ANGLE SET TO "));
+        Serial.println(vent_angle);
+      } else if (cmdBuffer.startsWith("COVER:")) {
+        int ang = cmdBuffer.substring(6).toInt();
+        updateCover(ang);
+        Serial.print(F(">> [SERVO 2] COVER ANGLE SET TO "));
+        Serial.println(cover_angle);
+      } else if (cmdBuffer.equalsIgnoreCase("AUTO")) {
+        manual_pump_override = false;
+        manual_vent_override = false;
+        Serial.println(F(">> [SYSTEM] RESUMED FULL AUTONOMOUS CONTROL"));
       }
       cmdBuffer = "";
     } else {
@@ -562,7 +600,7 @@ void checkButton() {
       debounced = r;
       if (debounced == LOW) { // Button Pressed
         mode = (mode + 1) % 3;
-        soundBeeps(mode + 1, 60);
+        soundBeeps(mode + 1, 140);
 
         // Show mode splash for 1.5s as per manual
         lcd.clear();
@@ -613,7 +651,7 @@ void setup() {
   lcd.setCursor(0, 1);
   lcd.print("TerraByte v1.0");
 
-  soundBeeps(2, 60);
+  soundBeeps(2, 140);
   delay(1800);
 
   // Initialize sensors
