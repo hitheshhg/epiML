@@ -52,10 +52,10 @@ export default function ActuatorControls({
             Actuation & Hardware Tele-operation
           </span>
           <h3 className="text-xl font-bold text-[#163828]">
-            Interactive Physical Actuator Deck
+            {t.actuatorTitle}
           </h3>
           <p className="text-xs text-[#52796F] mt-0.5">
-            Zero-latency remote actuation via PySerial / Web Serial Bridge
+            {t.actuatorSubtitle}
           </p>
         </div>
 
@@ -65,16 +65,16 @@ export default function ActuatorControls({
           className="py-2 px-4 rounded-xl border border-[#A7E2BA] bg-[#E8F7EC] hover:bg-[#D8F3DC] text-[#1E4D36] text-xs font-bold transition-all shadow-sm flex items-center gap-2 self-start sm:self-auto"
         >
           <RotateCw className="w-3.5 h-3.5" />
-          Resume Auto CPS Loop
+          {t.resumeAuto}
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 my-6">
         
-        {/* Actuator 1: Water Pump Relay (Pin D13) */}
+        {/* Actuator 1: Water Pump Motor / Relay (Pin D13) */}
         <div className="p-5 rounded-2xl bg-[#F7F9F5] border border-[#E2E8DC] flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#163828]">Water Pump Relay</span>
+            <span className="text-xs font-bold text-[#163828]">{t.pumpMotor}</span>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                 pumpState === 1
@@ -87,12 +87,12 @@ export default function ActuatorControls({
           </div>
 
           <p className="text-[11px] text-[#52796F]">
-            Pin D13 (Active-LOW Optocoupled Relay driving 5V Submersible Pump).
+            {t.pumpMotorDesc}
           </p>
 
           <div className="grid grid-cols-2 gap-2 pt-2">
             <button
-              onClick={() => dispatch("PUMP:ON")}
+              onClick={() => dispatch("MOTOR:ON")}
               disabled={sending}
               className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                 pumpState === 1
@@ -104,7 +104,7 @@ export default function ActuatorControls({
               {t.pumpOn}
             </button>
             <button
-              onClick={() => dispatch("PUMP:OFF")}
+              onClick={() => dispatch("MOTOR:OFF")}
               disabled={sending}
               className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                 pumpState === 0
@@ -121,14 +121,14 @@ export default function ActuatorControls({
         {/* Actuator 2: Vent Shutter (Servo 1 on D5) */}
         <div className="p-5 rounded-2xl bg-[#F7F9F5] border border-[#E2E8DC] flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#163828]">Climate Vent Aperture</span>
+            <span className="text-xs font-bold text-[#163828]">{t.ventAperture}</span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F7EC] text-[#1E4D36] font-mono">
               {ventAngle}°
             </span>
           </div>
 
           <p className="text-[11px] text-[#52796F]">
-            Pin D5 (TowerPro SG90 9g Micro Servo Flap: 0° Closed to 90° Flush).
+            {t.ventDesc}
           </p>
 
           <div className="grid grid-cols-3 gap-1.5 pt-2">
@@ -165,14 +165,14 @@ export default function ActuatorControls({
         {/* Actuator 3: Shade Cover (Servo 2 on D6) */}
         <div className="p-5 rounded-2xl bg-[#F7F9F5] border border-[#E2E8DC] flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#163828]">Tray Shade Cover</span>
+            <span className="text-xs font-bold text-[#163828]">{t.shadeCover}</span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F7EC] text-[#1E4D36] font-mono">
               {coverAngle === 90 ? "Darkened (90°)" : "Retracted (0°)"}
             </span>
           </div>
 
           <p className="text-[11px] text-[#52796F]">
-            Pin D6 (Photoperiod & Noon Shade Shutter for etiolation control).
+            {t.shadeDesc}
           </p>
 
           <div className="grid grid-cols-2 gap-2 pt-2">
@@ -202,14 +202,14 @@ export default function ActuatorControls({
         {/* Actuator 4: Acoustic Buzzer & Status Tests */}
         <div className="p-5 rounded-2xl bg-[#F7F9F5] border border-[#E2E8DC] flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#163828]">Buzzer Annunciator</span>
+            <span className="text-xs font-bold text-[#163828]">{t.buzzerAnnunciator}</span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF2ED] text-[#E76F51]">
               Pin A3
             </span>
           </div>
 
           <p className="text-[11px] text-[#52796F]">
-            TMB12A12 Active Electromagnetic Beeper chime verification.
+            {t.buzzerDesc}
           </p>
 
           <button
@@ -227,9 +227,9 @@ export default function ActuatorControls({
         <div className="px-4 py-2.5 rounded-xl bg-[#F0F6EE] border border-[#D8E6D3] text-xs text-[#2D6A4F] flex items-center justify-between">
           <span className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-[#40916C]" />
-            Last Dispatched Hardware Command: <code className="font-mono font-bold bg-white px-1.5 py-0.5 rounded border border-[#D8E6D3]">{lastDispatched}</code>
+            {t.lastCommand}: <code className="font-mono font-bold bg-white px-1.5 py-0.5 rounded border border-[#D8E6D3]">{lastDispatched}</code>
           </span>
-          <span className="text-[11px] text-[#52796F]">Saved to data/cmd.txt</span>
+          <span className="text-[11px] text-[#52796F]">data/cmd.txt</span>
         </div>
       )}
 

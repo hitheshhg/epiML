@@ -123,7 +123,7 @@ export default function SeedMonitor({ lang }: SeedMonitorProps) {
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>AI Tray Map</span>
+              <span>{t.tabTrayMap}</span>
             </button>
             <button
               onClick={() => setActiveTab("camera")}
@@ -134,7 +134,7 @@ export default function SeedMonitor({ lang }: SeedMonitorProps) {
               }`}
             >
               <Camera className="w-3.5 h-3.5" />
-              <span>Tray Photo</span>
+              <span>{t.tabTrayPhoto}</span>
             </button>
             <button
               onClick={() => setActiveTab("metrics")}
@@ -145,7 +145,7 @@ export default function SeedMonitor({ lang }: SeedMonitorProps) {
               }`}
             >
               <TrendingUp className="w-3.5 h-3.5" />
-              <span>Pheno-Metrics</span>
+              <span>{t.tabPhenoMetrics}</span>
             </button>
           </div>
 
@@ -297,7 +297,7 @@ export default function SeedMonitor({ lang }: SeedMonitorProps) {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-[#163828] flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-[#2D6A4F]" />
-                Selected Sprout Inspection
+                {t.sproutInspector}
               </h3>
               <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-[#D8F3DC] text-[#1E4D36]">
                 {selectedDetection ? selectedDetection.label : "Sprout #1"}
@@ -306,23 +306,23 @@ export default function SeedMonitor({ lang }: SeedMonitorProps) {
 
             <div className="space-y-3 text-xs">
               <div className="flex justify-between p-2.5 rounded-xl bg-white border border-[#E2E8DC]">
-                <span className="text-[#52796F]">Emerged Height</span>
+                <span className="text-[#52796F]">{t.sproutHeight}</span>
                 <span className="font-bold text-[#163828] font-mono">
                   {selectedDetection ? `${selectedDetection.heightMm} mm` : "14.2 mm"}
                 </span>
               </div>
               <div className="flex justify-between p-2.5 rounded-xl bg-white border border-[#E2E8DC]">
-                <span className="text-[#52796F]">Individual Vigor Index</span>
+                <span className="text-[#52796F]">{t.sproutVigor}</span>
                 <span className="font-bold text-[#2D6A4F] font-mono">
                   {selectedDetection ? `${selectedDetection.vigor} / 100` : "94 / 100"}
                 </span>
               </div>
               <div className="flex justify-between p-2.5 rounded-xl bg-white border border-[#E2E8DC]">
-                <span className="text-[#52796F]">Radicle Integrity</span>
-                <span className="font-bold text-[#163828]">Straight (Optimal)</span>
+                <span className="text-[#52796F]">{t.radicleIntegrity}</span>
+                <span className="font-bold text-[#163828]">Straight ({t.optimalSaturation})</span>
               </div>
               <div className="flex justify-between p-2.5 rounded-xl bg-white border border-[#E2E8DC]">
-                <span className="text-[#52796F]">Foliar Chlorophyll Level</span>
+                <span className="text-[#52796F]">{t.chlorophyllLevel}</span>
                 <span className="font-bold text-[#2D6A4F]">High Green (Healthy)</span>
               </div>
             </div>
@@ -330,37 +330,37 @@ export default function SeedMonitor({ lang }: SeedMonitorProps) {
             {/* Growth Stage Tracker */}
             <div className="pt-2 border-t border-[#E2E8DC]">
               <span className="text-xs font-semibold text-[#163828] block mb-2">
-                Seed Germination Lifecycle
+                {t.growthLifecycle}
               </span>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs">
                   <CheckCircle2 className="w-4 h-4 text-[#2D6A4F]" />
-                  <span className="text-[#1E4D36] font-medium">Day 1: Water Imbibition</span>
+                  <span className="text-[#1E4D36] font-medium">{t.day1}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="w-4 h-4 rounded-full bg-[#52B788] flex items-center justify-center text-[10px] text-white font-bold animate-pulse">
                     ●
                   </span>
-                  <span className="font-bold text-[#163828]">Day 2: Radicle Emergence (Active)</span>
+                  <span className="font-bold text-[#163828]">{t.day2}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs opacity-60">
                   <span className="w-4 h-4 rounded-full border border-[#8DA297] flex items-center justify-center text-[10px]">
                     3
                   </span>
-                  <span className="text-[#4F6D5E]">Day 3: Shoot & Foliar Expansion</span>
+                  <span className="text-[#4F6D5E]">{t.day3}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs opacity-60">
                   <span className="w-4 h-4 rounded-full border border-[#8DA297] flex items-center justify-center text-[10px]">
                     5
                   </span>
-                  <span className="text-[#4F6D5E]">Day 5: Field Ready Hardening</span>
+                  <span className="text-[#4F6D5E]">{t.day5}</span>
                 </div>
               </div>
             </div>
 
             {/* Smart Advisory */}
             <div className="p-3 rounded-2xl bg-[#E8F7EC] text-[#1E4D36] text-[11px] leading-relaxed border border-[#A7E2BA]">
-              <strong>Agronomist Advisory:</strong> Moisture in tray A0 is ideal at 52%. Vent shutter should remain closed until 32°C to prevent hypocotyl dehydration.
+              <strong>{t.agronomistAdvice}:</strong> {t.agronomistAdviceText}
             </div>
 
           </div>

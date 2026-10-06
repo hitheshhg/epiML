@@ -1,18 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
-import { translations, Language } from "@/lib/translations";
+import React, { useState, useRef, useEffect } from "react";
+import { translations, LANGUAGES, Language } from "@/lib/translations";
 import {
   Sprout,
   Cpu,
   Wifi,
-  WifiOff,
   Globe,
   Settings,
   ChevronDown,
   RefreshCw,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Check
 } from "lucide-react";
 
 interface NavbarProps {
@@ -40,8 +40,22 @@ export default function Navbar({
 }: NavbarProps) {
   const t = translations[lang];
   const [showConnectModal, setShowConnectModal] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connMessage, setConnMessage] = useState<string | null>(null);
+
+  const langMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close language menu on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (langMenuRef.current && !langMenuRef.current.contains(event.target as Node)) {
+        setShowLangMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleWebSerial = async () => {
     setIsConnecting(true);
@@ -62,9 +76,11 @@ export default function Navbar({
     }
   };
 
+  const currentLangMeta = LANGUAGES.find((l) => l.code === lang) || LANGUAGES[0];
+
   return (
     <>
-      <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/80 border-b border-[#E2E8DC]">
+      <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/85 border-b border-[#E2E8DC]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
           
           {/* Brand Identity */}
@@ -121,7 +137,7 @@ export default function Navbar({
             </button>
           </div>
 
-          {/* Right Action Stack: Hardware Connection + Language */}
+          {/* Right Action Stack: Hardware Connection + Language Selector */}
           <div className="flex items-center gap-2.5">
             
             {/* Live Hardware Status Pill */}
@@ -151,61 +167,82 @@ export default function Navbar({
                   ? `USB: ${portName}`
                   : isLive
                   ? "Bridge: COM8"
-                  : "Hardware Offline"}
+                  : t.hardwareDisconnected}
               </span>
               <Cpu className="w-3.5 h-3.5 opacity-70" />
             </button>
 
-            {/* Language Dropdown */}
-            <div className="relative group">
+            {/* Best-in-Class Interactive Click-to-Toggle Language Selector */}
+            <div className="relative" ref={langMenuRef}>
               <button
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#F0F4EC] hover:bg-[#E4EBDD] text-[#1E4D36] text-xs font-semibold border border-[#E2E8DC] transition-colors"
-                aria-label="Language Selector"
+                onClick={() => setShowLangMenu(!showLangMenu)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#F0F4EC] hover:bg-[#E4EBDD] text-[#163828] text-xs font-bold border border-[#E2E8DC] transition-all shadow-sm active:scale-95"
+                aria-label="Language Selector Menu"
               >
-                <Globe className="w-3.5 h-3.5" />
-                <span className="uppercase">{lang}</span>
-                <ChevronDown className="w-3 h-3 opacity-60" />
+                <Globe className="w-4 h-4 text-[#2D6A4F]" />
+                <span className="font-semibold text-xs tracking-wide">
+                  {currentLangMeta.nativeName}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-[#52796F] transition-transform duration-200 ${showLangMenu ? "rotate-180" : ""}`} />
               </button>
-              <div className="absolute right-0 mt-1 w-32 rounded-xl bg-white shadow-xl border border-[#E2E8DC] p-1.5 hidden group-hover:block z-50">
-                <button
-                  onClick={() => setLang("en")}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    lang === "en" ? "bg-[#E8F7EC] text-[#1E4D36] font-bold" : "text-[#3D5A4C] hover:bg-[#F5F8F2]"
-                  }`}
-                >
-                  English (EN)
-                </button>
-                <button
-                  onClick={() => setLang("kn")}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    lang === "kn" ? "bg-[#E8F7EC] text-[#1E4D36] font-bold" : "text-[#3D5A4C] hover:bg-[#F5F8F2]"
-                  }`}
-                >
-                  ಕನ್ನಡ (KN)
-                </button>
-                <button
-                  onClick={() => setLang("tu")}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    lang === "tu" ? "bg-[#E8F7EC] text-[#1E4D36] font-bold" : "text-[#3D5A4C] hover:bg-[#F5F8F2]"
-                  }`}
-                >
-                  ತುಳು (TU)
-                </button>
-                <button
-                  onClick={() => setLang("hi")}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    lang === "hi" ? "bg-[#E8F7EC] text-[#1E4D36] font-bold" : "text-[#3D5A4C] hover:bg-[#F5F8F2]"
-                  }`}
-                >
-                  हिंदी (HI)
-                </button>
-              </div>
+
+              {/* Working Language Dropdown Menu Card */}
+              {showLangMenu && (
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white shadow-2xl border border-[#D5E1CD] p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-2 border-b border-[#F0F4EC] mb-1">
+                    <span className="text-[11px] font-bold text-[#52796F] uppercase tracking-wider block">
+                      Select Interface Language
+                    </span>
+                    <span className="text-[10px] text-[#7C9A8B]">
+                      ಕೃಷಿಕರ ಅನುಕೂಲಕ್ಕಾಗಿ ಬಹುಭಾಷಾ ವ್ಯವಸ್ಥೆ
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    {LANGUAGES.map((l) => {
+                      const isSelected = lang === l.code;
+                      return (
+                        <button
+                          key={l.code}
+                          onClick={() => {
+                            setLang(l.code);
+                            setShowLangMenu(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-all flex items-center justify-between group ${
+                            isSelected
+                              ? "bg-gradient-to-r from-[#E8F7EC] to-[#D8F3DC] text-[#163828] font-bold border border-[#A7E2BA]"
+                              : "text-[#3D5A4C] hover:bg-[#F5F8F2] hover:text-[#163828]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-6 h-6 rounded-lg bg-[#F0F4EC] text-[#2D6A4F] group-hover:bg-white text-[11px] font-extrabold flex items-center justify-center font-mono">
+                              {l.badge}
+                            </span>
+                            <div>
+                              <div className="font-bold text-xs text-[#163828]">
+                                {l.nativeName}
+                              </div>
+                              <div className="text-[10px] text-[#7C9A8B]">
+                                {l.name} · {l.region}
+                              </div>
+                            </div>
+                          </div>
+
+                          {isSelected && (
+                            <Check className="w-4 h-4 text-[#2D6A4F] stroke-[2.5]" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Quick Refresh */}
             <button
               onClick={onRefresh}
-              className="p-1.5 rounded-xl bg-[#F0F4EC] hover:bg-[#E4EBDD] text-[#1E4D36] border border-[#E2E8DC] transition-colors"
+              className="p-2 rounded-xl bg-[#F0F4EC] hover:bg-[#E4EBDD] text-[#1E4D36] border border-[#E2E8DC] transition-colors"
               title="Refresh Telemetry"
             >
               <RefreshCw className="w-4 h-4" />
@@ -224,7 +261,7 @@ export default function Navbar({
                   <Cpu className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-[#163828]">Hardware Connection</h3>
+                  <h3 className="text-lg font-bold text-[#163828]">{t.connectHardware}</h3>
                   <p className="text-xs text-[#52796F]">Link Arduino Uno microcontroller</p>
                 </div>
               </div>
@@ -247,7 +284,7 @@ export default function Navbar({
                       Direct Browser USB Serial
                     </h4>
                     <p className="text-xs text-[#52796F] mt-1">
-                      Direct connection via Web Serial API. Works in Google Chrome & Edge. Select your COM port (115200 baud).
+                      Direct connection via Web Serial API. Works in Google Chrome & Edge. Select COM port (115200 baud).
                     </p>
                   </div>
                 </div>
@@ -267,7 +304,7 @@ export default function Navbar({
                       Connected (Click to Reconnect)
                     </>
                   ) : (
-                    "Select Arduino USB Port"
+                    t.selectUsb
                   )}
                 </button>
               </div>
@@ -283,7 +320,7 @@ export default function Navbar({
                 </p>
                 <div className="mt-3 flex items-center gap-2 text-xs font-medium text-[#1E4D36]">
                   <span className={`w-2 h-2 rounded-full ${isLive ? "bg-[#2D6A4F]" : "bg-[#F4A261]"}`} />
-                  Status: {isLive ? "Bridge Active & Streaming" : "Waiting for Bridge..."}
+                  Status: {isLive ? t.bridgeActive : "Waiting for Bridge..."}
                 </div>
               </div>
             </div>
@@ -299,7 +336,7 @@ export default function Navbar({
               onClick={() => setShowConnectModal(false)}
               className="w-full py-2.5 rounded-xl border border-[#E2E8DC] hover:bg-[#F0F4EC] text-xs font-semibold text-[#4F6D5E] transition-colors"
             >
-              Done
+              {t.done}
             </button>
           </div>
         </div>

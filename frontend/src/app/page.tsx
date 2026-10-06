@@ -8,6 +8,7 @@ import SensorGrid from "@/components/SensorGrid";
 import ActuatorControls from "@/components/ActuatorControls";
 import ExplainableAi from "@/components/ExplainableAi";
 import TrendCharts from "@/components/TrendCharts";
+import CadViewer from "@/components/CadViewer";
 import { Language, translations } from "@/lib/translations";
 
 interface TelemetryData {
@@ -29,9 +30,26 @@ interface TelemetryData {
 
 export default function Home() {
   const [lang, setLang] = useState<Language>("en");
+
+  // Load saved language on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("chiguru_lang") as Language;
+      if (saved && ["en", "kn", "tu", "hi"].includes(saved)) {
+        setLang(saved);
+      }
+    }
+  }, []);
+
+  const changeLanguage = (newLang: Language) => {
+    setLang(newLang);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("chiguru_lang", newLang);
+    }
+  };
+
   const [mode, setMode] = useState<number>(1); // Default to Germination
   const [telemetry, setTelemetry] = useState<TelemetryData>({
-    timestamp: new Date().toISOString(),
     mode: 1,
     temp1: 27.4,
     hum1: 64.2,
@@ -78,6 +96,46 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [fetchTelemetry, serialConnected]);
 
+  // Cleanly handle USB disconnects, brownouts, and suppress unhandled rejection overlay
+  useEffect(() => {
+    const handleDisconnect = () => {
+      console.warn("USB Serial hardware was disconnected or reset");
+      serialPortRef.current = null;
+      serialWriterRef.current = null;
+      setSerialConnected(false);
+      setPortName("Disconnected");
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const msg = event?.reason?.message || String(event?.reason || "");
+      if (
+        msg.includes("device has been lost") ||
+        msg.includes("NetworkError") ||
+        event?.reason?.name === "NetworkError"
+      ) {
+        // Prevent Next.js red error modal on USB drop/brownout
+        event.preventDefault();
+        handleDisconnect();
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("unhandledrejection", handleUnhandledRejection);
+      if ("serial" in navigator) {
+        (navigator as any).serial.addEventListener("disconnect", handleDisconnect);
+      }
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+        if ("serial" in navigator) {
+          (navigator as any).serial.removeEventListener("disconnect", handleDisconnect);
+        }
+      }
+    };
+  }, []);
+
   // Connect via Direct Browser Web Serial API (Chrome / Edge)
   const connectWebSerial = async (): Promise<boolean> => {
     if (typeof window === "undefined" || !("serial" in navigator)) {
@@ -91,16 +149,23 @@ export default function Home() {
       await port.open({ baudRate: 115200 });
       serialPortRef.current = port;
 
+      // Start writer stream loop with catch
       const textEncoder = new TextEncoderStream();
-      textEncoder.readable.pipeTo(port.writable);
+      textEncoder.readable.pipeTo(port.writable).catch((err: any) => {
+        // Stream aborted due to device disconnect/reset - suppress unhandled rejection
+        console.warn("Serial write stream disconnected:", err?.message || err);
+      });
       serialWriterRef.current = textEncoder.writable.getWriter();
 
       setSerialConnected(true);
       setPortName("USB Serial (Live)");
 
-      // Start reader stream loop
+      // Start reader stream loop with catch
       const textDecoder = new TextDecoderStream();
-      port.readable.pipeTo(textDecoder.writable);
+      port.readable.pipeTo(textDecoder.writable).catch((err: any) => {
+        // Stream aborted due to device disconnect/reset - suppress unhandled rejection
+        console.warn("Serial read stream disconnected:", err?.message || err);
+      });
       const reader = textDecoder.readable.getReader();
 
       (async () => {
@@ -136,15 +201,26 @@ export default function Home() {
               }
             }
           }
-        } catch (readErr) {
-          console.warn("Serial reader closed:", readErr);
+        } catch (readErr: any) {
+          console.warn("Serial connection ended or reset:", readErr?.message || readErr);
+        } finally {
+          try {
+            await reader.cancel();
+          } catch {}
+          try {
+            reader.releaseLock();
+          } catch {}
+          serialPortRef.current = null;
+          serialWriterRef.current = null;
           setSerialConnected(false);
+          setPortName("Disconnected");
         }
       })();
 
       return true;
-    } catch (err) {
-      console.error("WebSerial connect failed:", err);
+    } catch (err: any) {
+      console.warn("WebSerial connect cancelled or failed:", err?.message || err);
+      setSerialConnected(false);
       return false;
     }
   };
@@ -184,7 +260,7 @@ export default function Home() {
       {/* Top Navbar */}
       <Navbar
         lang={lang}
-        setLang={setLang}
+        setLang={changeLanguage}
         mode={mode}
         setMode={handleModeChange}
         isLive={Boolean(telemetry.is_hardware_live)}
@@ -215,6 +291,9 @@ export default function Home() {
 
         {/* Real-Time Seed & Germination Monitor */}
         <SeedMonitor lang={lang} />
+
+        {/* 3D CAD Representation & Mechanical Architecture */}
+        <CadViewer lang={lang} />
 
         {/* 7-Channel Live Hardware Sensory Grid */}
         <SensorGrid

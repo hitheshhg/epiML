@@ -547,14 +547,21 @@ void parseSerialCommands() {
           delay(800);
           updateLcd();
         }
-      } else if (cmdBuffer.equalsIgnoreCase("PUMP:ON") || cmdBuffer.equalsIgnoreCase("ON") || cmdBuffer.equals("1")) {
+      } else if (cmdBuffer.equalsIgnoreCase("PUMP:ON") || cmdBuffer.equalsIgnoreCase("MOTOR:ON") || cmdBuffer.equalsIgnoreCase("ON") || cmdBuffer.equals("1")) {
         manual_pump_override = true;
         setPump(true, true);
-        Serial.println(F(">> [RELAY] PUMP FORCED ON (CLICK!)"));
-      } else if (cmdBuffer.equalsIgnoreCase("PUMP:OFF") || cmdBuffer.equalsIgnoreCase("OFF") || cmdBuffer.equals("0")) {
+        soundBeeps(1, 80);
+        Serial.println(F(">> [MOTOR/RELAY] PUMP MOTOR FORCED ON (CLICK!)"));
+      } else if (cmdBuffer.equalsIgnoreCase("PUMP:OFF") || cmdBuffer.equalsIgnoreCase("MOTOR:OFF") || cmdBuffer.equalsIgnoreCase("OFF") || cmdBuffer.equals("0")) {
         manual_pump_override = false;
         setPump(false, true);
-        Serial.println(F(">> [RELAY] PUMP FORCED OFF (CLICK!)"));
+        Serial.println(F(">> [MOTOR/RELAY] PUMP MOTOR FORCED OFF (CLICK!)"));
+      } else if (cmdBuffer.equalsIgnoreCase("FAN:ON")) {
+        setFan(true);
+        Serial.println(F(">> [FAN] AERATION FAN ON"));
+      } else if (cmdBuffer.equalsIgnoreCase("FAN:OFF")) {
+        setFan(false);
+        Serial.println(F(">> [FAN] AERATION FAN OFF"));
       } else if (cmdBuffer.equalsIgnoreCase("INV")) {
         RELAY_ACTIVE_LOW = !RELAY_ACTIVE_LOW;
         digitalWrite(RELAY, pump_state ? (RELAY_ACTIVE_LOW ? LOW : HIGH) : (RELAY_ACTIVE_LOW ? HIGH : LOW));
