@@ -49,6 +49,7 @@ import UserDashboard from "@/components/chiguru/UserDashboard";
 import TraySowingCanvas, { SownSeedPin } from "@/components/chiguru/TraySowingCanvas";
 import AdminMLCenter from "@/components/chiguru/AdminMLCenter";
 import PredictionDeck from "@/components/chiguru/PredictionDeck";
+import SeedIntelligencePage from "@/components/chiguru/SeedIntelligencePage";
 
 // Clean GitHub Octocat SVG
 function GitHubIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -73,7 +74,7 @@ export default function HomePage() {
   // "step-3" = Deterministic Hardware Link
   // "admin-ml" = Admin ML Training & Model Management Center
   // "step-4" = Live Laboratory Chamber Cockpit
-  const [viewState, setViewState] = useState<"landing" | "dashboard" | "admin-ml" | "step-1" | "step-tray" | "step-2" | "step-3" | "step-4">("landing");
+  const [viewState, setViewState] = useState<"landing" | "dashboard" | "seed-intelligence" | "admin-ml" | "step-1" | "step-tray" | "step-2" | "step-3" | "step-4">("landing");
 
   // Authentication State
   const [user, setUser] = useState<{ id: string; email: string; name?: string } | null>(null);
@@ -270,7 +271,7 @@ export default function HomePage() {
 
   // Auth Guard: Never allow viewing dashboard or experiment steps 1-4 without an authenticated session
   useEffect(() => {
-    if (viewState !== "landing" && viewState !== "admin-ml" && !user) {
+    if (viewState !== "landing" && viewState !== "admin-ml" && viewState !== "seed-intelligence" && !user) {
       const cached = typeof window !== "undefined" ? localStorage.getItem("chiguru_auth_user") : null;
       if (!cached) {
         setViewState("landing");
@@ -879,6 +880,24 @@ export default function HomePage() {
                   <span>Dashboard</span>
                 </Button>
 
+                {/* 1.5. Seed Intelligence Navigation Tab (Location-Aware ML Engine) */}
+                <Button
+                  variant={viewState === "seed-intelligence" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setViewState("seed-intelligence");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`rounded-xl text-xs sm:text-sm h-9 px-3 font-medium transition-all ${
+                    viewState === "seed-intelligence"
+                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+                  <span>Seed Intelligence</span>
+                </Button>
+
                 {/* 2. Experiment Section Navigation Tab */}
                 <Button
                   variant={viewState.startsWith("step-") ? "default" : "ghost"}
@@ -962,6 +981,23 @@ export default function HomePage() {
               </>
             ) : (
               <div className="flex items-center gap-2 sm:gap-3">
+                <Button
+                  variant={viewState === "seed-intelligence" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setViewState("seed-intelligence");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`rounded-xl text-xs sm:text-sm h-9 px-2.5 sm:px-3 font-medium transition-all ${
+                    viewState === "seed-intelligence"
+                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+                  <span>Seed Intelligence</span>
+                </Button>
+
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1051,6 +1087,19 @@ export default function HomePage() {
                     <span>View Dashboard</span>
                   </Button>
                 )}
+
+                <Button
+                  onClick={() => {
+                    setViewState("seed-intelligence");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto h-12 px-6 rounded-xl border border-emerald-600/40 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 font-semibold text-sm sm:text-base flex items-center justify-center gap-2 hover:bg-emerald-100/50 active:scale-[0.98] transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <span>Seed Intelligence</span>
+                </Button>
 
                 <Button
                   asChild
@@ -1195,6 +1244,25 @@ export default function HomePage() {
                 }}
                 isAdmin={isAdminAuthenticated}
                 onOpenAdminLogin={() => setIsAdminAuthModalOpen(true)}
+              />
+            </motion.div>
+          )}
+
+          {/* ===================================================================== */}
+          {/* VIEW: SEED INTELLIGENCE — LOCATION-AWARE & SEED-CONDITIONED ML ENGINE */}
+          {/* ===================================================================== */}
+          {viewState === "seed-intelligence" && (
+            <motion.div
+              key="seed-intelligence"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="flex-1 w-full"
+            >
+              <SeedIntelligencePage
+                currentTelemetry={telemetry}
+                isHardwareConnected={serialConnected || telemetry.isLiveHardware}
               />
             </motion.div>
           )}

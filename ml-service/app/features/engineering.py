@@ -72,7 +72,23 @@ def build_time_series_features(
         "aqi_x_temp", "aqi_x_humidity", "vpd_kpa"
     ])
 
-    # 3. Time-of-Day Cyclic & Seasonal Features
+    # 3. External Weather Context & Local-External Sensor Fusion
+    if "ext_temperature_2m" in data.columns:
+        data["diff_temperature"] = data["temperature_c"] - data["ext_temperature_2m"]
+        feature_cols.extend(["ext_temperature_2m", "diff_temperature"])
+    if "ext_relative_humidity_2m" in data.columns:
+        data["diff_humidity"] = data["humidity_pct"] - data["ext_relative_humidity_2m"]
+        feature_cols.extend(["ext_relative_humidity_2m", "diff_humidity"])
+    for ext_col in ["ext_precipitation", "ext_surface_pressure", "ext_solar_radiation", "ext_vpd"]:
+        if ext_col in data.columns:
+            feature_cols.append(ext_col)
+
+    # 4. Location Context Conditioning
+    for loc_col in ["latitude", "longitude", "elevation"]:
+        if loc_col in data.columns:
+            feature_cols.append(loc_col)
+
+    # 5. Time-of-Day Cyclic & Seasonal Features
     if "timestamp" in data.columns:
         hours = data["timestamp"].dt.hour + data["timestamp"].dt.minute / 60.0
         data["hour_sin"] = np.sin(2 * np.pi * hours / 24.0)
@@ -80,7 +96,7 @@ def build_time_series_features(
         data["day_of_week"] = data["timestamp"].dt.dayofweek
         feature_cols.extend(["hour_sin", "hour_cos", "day_of_week"])
 
-    # 4. Actuator State Encodings (if available)
+    # 6. Actuator State Encodings (if available)
     for act in ["fan_state", "pump_state", "vent_angle_deg"]:
         if act in data.columns:
             feature_cols.append(act)

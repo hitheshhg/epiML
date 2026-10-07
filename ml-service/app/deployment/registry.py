@@ -187,4 +187,13 @@ class ModelRegistry:
                 self.active_model = joblib.load(art_path)
                 self.active_metadata = ModelArtifactMetadata(**entry)
 
+    def list_models(self) -> List[Dict[str, Any]]:
+        """Returns list of all model entries registered in catalog."""
+        return list(self.models_catalog.values())
+
+    def rollback(self) -> bool:
+        """Alias for rollback_to_previous returning boolean success."""
+        success, _ = self.rollback_to_previous()
+        return success
+
 registry = ModelRegistry()
