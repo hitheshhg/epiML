@@ -25,6 +25,7 @@ import {
   Download,
   Trash2,
   Database,
+  Cpu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ interface UserDashboardProps {
   onStartNewExperiment: () => void;
   onResumeActiveExperiment: (exp?: UserExperimentHistory) => void;
   onRerunProtocol: (protocol: SeedProtocol) => void;
+  onOpenMLCenter?: () => void;
 }
 
 export default function UserDashboard({
@@ -77,6 +79,7 @@ export default function UserDashboard({
   onStartNewExperiment,
   onResumeActiveExperiment,
   onRerunProtocol,
+  onOpenMLCenter,
 }: UserDashboardProps) {
   const [filter, setFilter] = useState<"all" | "completed" | "running">("all");
   const [search, setSearch] = useState("");
@@ -426,6 +429,17 @@ export default function UserDashboard({
               <span>Start New Experiment</span>
               <ArrowRight className="w-4 h-4" />
             </Button>
+
+            {onOpenMLCenter && (
+              <Button
+                onClick={onOpenMLCenter}
+                variant="outline"
+                className="h-11 px-4 rounded-xl border border-border bg-card hover:bg-muted text-foreground flex items-center justify-center gap-2 text-xs sm:text-sm font-medium"
+              >
+                <Cpu className="w-4 h-4 text-emerald-500" />
+                <span>Admin ML Center</span>
+              </Button>
+            )}
           </div>
 
         </div>

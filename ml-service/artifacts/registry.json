@@ -1,0 +1,278 @@
+{
+  "active_version": "v_test_e2e",
+  "previous_version": null,
+  "updated_at": "2026-10-07T05:45:40Z",
+  "models": {
+    "v_test_e2e": {
+      "model_id": "MOD-v_test_e2e",
+      "version_tag": "v_test_e2e",
+      "algorithm": "MultiTargetChampion",
+      "targets": [
+        "aqi",
+        "temperature_c",
+        "humidity_pct",
+        "soil_moisture_pct"
+      ],
+      "prediction_horizon_minutes": 30,
+      "feature_names": [
+        "temperature_c_current",
+        "humidity_pct_current",
+        "soil_moisture_pct_current",
+        "aqi_current",
+        "temp_x_humidity",
+        "temp_x_soil",
+        "humidity_x_soil",
+        "aqi_x_temp",
+        "aqi_x_humidity",
+        "vpd_kpa",
+        "hour_sin",
+        "hour_cos",
+        "day_of_week",
+        "fan_state",
+        "pump_state",
+        "vent_angle_deg",
+        "temperature_c_lag_1",
+        "temperature_c_lag_3",
+        "temperature_c_lag_6",
+        "temperature_c_lag_12",
+        "humidity_pct_lag_1",
+        "humidity_pct_lag_3",
+        "humidity_pct_lag_6",
+        "humidity_pct_lag_12",
+        "soil_moisture_pct_lag_1",
+        "soil_moisture_pct_lag_3",
+        "soil_moisture_pct_lag_6",
+        "soil_moisture_pct_lag_12",
+        "aqi_lag_1",
+        "aqi_lag_3",
+        "aqi_lag_6",
+        "aqi_lag_12",
+        "temperature_c_roc_1",
+        "temperature_c_roc_3",
+        "temperature_c_roll_mean_3",
+        "temperature_c_roll_std_3",
+        "temperature_c_roll_min_3",
+        "temperature_c_roll_max_3",
+        "temperature_c_roll_median_3",
+        "temperature_c_roll_mean_6",
+        "temperature_c_roll_std_6",
+        "temperature_c_roll_min_6",
+        "temperature_c_roll_max_6",
+        "temperature_c_roll_median_6",
+        "temperature_c_roll_mean_12",
+        "temperature_c_roll_std_12",
+        "temperature_c_roll_min_12",
+        "temperature_c_roll_max_12",
+        "temperature_c_roll_median_12",
+        "humidity_pct_roc_1",
+        "humidity_pct_roc_3",
+        "humidity_pct_roll_mean_3",
+        "humidity_pct_roll_std_3",
+        "humidity_pct_roll_min_3",
+        "humidity_pct_roll_max_3",
+        "humidity_pct_roll_median_3",
+        "humidity_pct_roll_mean_6",
+        "humidity_pct_roll_std_6",
+        "humidity_pct_roll_min_6",
+        "humidity_pct_roll_max_6",
+        "humidity_pct_roll_median_6",
+        "humidity_pct_roll_mean_12",
+        "humidity_pct_roll_std_12",
+        "humidity_pct_roll_min_12",
+        "humidity_pct_roll_max_12",
+        "humidity_pct_roll_median_12",
+        "soil_moisture_pct_roc_1",
+        "soil_moisture_pct_roc_3",
+        "soil_moisture_pct_roll_mean_3",
+        "soil_moisture_pct_roll_std_3",
+        "soil_moisture_pct_roll_min_3",
+        "soil_moisture_pct_roll_max_3",
+        "soil_moisture_pct_roll_median_3",
+        "soil_moisture_pct_roll_mean_6",
+        "soil_moisture_pct_roll_std_6",
+        "soil_moisture_pct_roll_min_6",
+        "soil_moisture_pct_roll_max_6",
+        "soil_moisture_pct_roll_median_6",
+        "soil_moisture_pct_roll_mean_12",
+        "soil_moisture_pct_roll_std_12",
+        "soil_moisture_pct_roll_min_12",
+        "soil_moisture_pct_roll_max_12",
+        "soil_moisture_pct_roll_median_12",
+        "aqi_roc_1",
+        "aqi_roc_3",
+        "aqi_roll_mean_3",
+        "aqi_roll_std_3",
+        "aqi_roll_min_3",
+        "aqi_roll_max_3",
+        "aqi_roll_median_3",
+        "aqi_roll_mean_6",
+        "aqi_roll_std_6",
+        "aqi_roll_min_6",
+        "aqi_roll_max_6",
+        "aqi_roll_median_6",
+        "aqi_roll_mean_12",
+        "aqi_roll_std_12",
+        "aqi_roll_min_12",
+        "aqi_roll_max_12",
+        "aqi_roll_median_12"
+      ],
+      "metrics": {
+        "overall_mae": 0.157,
+        "overall_rmse": 0.207,
+        "overall_r2": 0.6508,
+        "training_duration_seconds": 2.04,
+        "target_metrics": {
+          "aqi": {
+            "algorithm": "RandomForest",
+            "validation": {
+              "mae": 0.196,
+              "rmse": 0.236,
+              "r2": 0.9884,
+              "mape": 0.52
+            },
+            "test": {
+              "mae": 0.166,
+              "rmse": 0.207,
+              "r2": 0.9618,
+              "mape": 0.4
+            },
+            "residual_std": 0.197
+          },
+          "temperature_c": {
+            "algorithm": "RandomForest",
+            "validation": {
+              "mae": 0.106,
+              "rmse": 0.118,
+              "r2": 0.9946,
+              "mape": 0.47
+            },
+            "test": {
+              "mae": 0.106,
+              "rmse": 0.126,
+              "r2": 0.9777,
+              "mape": 0.42
+            },
+            "residual_std": 0.116
+          },
+          "humidity_pct": {
+            "algorithm": "RandomForest",
+            "validation": {
+              "mae": 0.238,
+              "rmse": 0.285,
+              "r2": 0.9955,
+              "mape": 0.3
+            },
+            "test": {
+              "mae": 0.181,
+              "rmse": 0.23,
+              "r2": 0.9897,
+              "mape": 0.25
+            },
+            "residual_std": 0.226
+          },
+          "soil_moisture_pct": {
+            "algorithm": "XGBoost",
+            "validation": {
+              "mae": 0.295,
+              "rmse": 0.401,
+              "r2": 0.0802,
+              "mape": 0.41
+            },
+            "test": {
+              "mae": 0.174,
+              "rmse": 0.267,
+              "r2": -0.3258,
+              "mape": 0.25
+            },
+            "residual_std": 0.227
+          }
+        },
+        "leaderboard": {
+          "aqi": [
+            {
+              "algorithm": "XGBoost",
+              "val_metrics": {
+                "mae": 0.915,
+                "rmse": 1.087,
+                "r2": 0.7536,
+                "mape": 2.43
+              }
+            },
+            {
+              "algorithm": "RandomForest",
+              "val_metrics": {
+                "mae": 0.196,
+                "rmse": 0.236,
+                "r2": 0.9884,
+                "mape": 0.52
+              }
+            }
+          ],
+          "temperature_c": [
+            {
+              "algorithm": "XGBoost",
+              "val_metrics": {
+                "mae": 0.633,
+                "rmse": 0.739,
+                "r2": 0.7884,
+                "mape": 2.81
+              }
+            },
+            {
+              "algorithm": "RandomForest",
+              "val_metrics": {
+                "mae": 0.106,
+                "rmse": 0.118,
+                "r2": 0.9946,
+                "mape": 0.47
+              }
+            }
+          ],
+          "humidity_pct": [
+            {
+              "algorithm": "XGBoost",
+              "val_metrics": {
+                "mae": 1.794,
+                "rmse": 2.151,
+                "r2": 0.7447,
+                "mape": 2.28
+              }
+            },
+            {
+              "algorithm": "RandomForest",
+              "val_metrics": {
+                "mae": 0.238,
+                "rmse": 0.285,
+                "r2": 0.9955,
+                "mape": 0.3
+              }
+            }
+          ],
+          "soil_moisture_pct": [
+            {
+              "algorithm": "XGBoost",
+              "val_metrics": {
+                "mae": 0.295,
+                "rmse": 0.401,
+                "r2": 0.0802,
+                "mape": 0.41
+              }
+            },
+            {
+              "algorithm": "RandomForest",
+              "val_metrics": {
+                "mae": 0.982,
+                "rmse": 1.033,
+                "r2": -5.097,
+                "mape": 1.37
+              }
+            }
+          ]
+        }
+      },
+      "artifact_path": "C:\\Users\\gurud\\OneDrive\\Desktop\\terrabyte\\ml-service\\artifacts\\model_v_test_e2e.joblib",
+      "status": "ACTIVE",
+      "created_at": "2026-10-07T05:45:40Z"
+    }
+  }
+}

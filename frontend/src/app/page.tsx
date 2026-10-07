@@ -43,6 +43,8 @@ import { supabase } from "@/lib/supabase/client";
 import LoginModal from "@/components/chiguru/LoginModal";
 import UserDashboard from "@/components/chiguru/UserDashboard";
 import TraySowingCanvas, { SownSeedPin } from "@/components/chiguru/TraySowingCanvas";
+import AdminMLCenter from "@/components/chiguru/AdminMLCenter";
+import PredictionDeck from "@/components/chiguru/PredictionDeck";
 
 // Clean GitHub Octocat SVG
 function GitHubIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -65,8 +67,9 @@ export default function HomePage() {
   // "step-tray" = 2D Mud Nursery Tray Sowing & Mud Sampling
   // "step-2" = AI Protocol Generation
   // "step-3" = Deterministic Hardware Link
+  // "admin-ml" = Admin ML Training & Model Management Center
   // "step-4" = Live Laboratory Chamber Cockpit
-  const [viewState, setViewState] = useState<"landing" | "dashboard" | "step-1" | "step-tray" | "step-2" | "step-3" | "step-4">("landing");
+  const [viewState, setViewState] = useState<"landing" | "dashboard" | "admin-ml" | "step-1" | "step-tray" | "step-2" | "step-3" | "step-4">("landing");
 
   // Authentication State
   const [user, setUser] = useState<{ id: string; email: string; name?: string } | null>(null);
@@ -238,13 +241,15 @@ export default function HomePage() {
         } else {
           setIsAuthModalOpen(true);
         }
+      } else if (urlParams.get("view") === "admin" || urlParams.get("view") === "admin-ml") {
+        setViewState("admin-ml");
       }
     }
   }, [user]);
 
   // Auth Guard: Never allow viewing dashboard or experiment steps 1-4 without an authenticated session
   useEffect(() => {
-    if (viewState !== "landing" && !user) {
+    if (viewState !== "landing" && viewState !== "admin-ml" && !user) {
       const cached = typeof window !== "undefined" ? localStorage.getItem("chiguru_auth_user") : null;
       if (!cached) {
         setViewState("landing");
@@ -771,6 +776,24 @@ export default function HomePage() {
                   )}
                 </Button>
 
+                {/* 3. Admin ML Training & Operations Center Tab */}
+                <Button
+                  variant={viewState === "admin-ml" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setViewState("admin-ml");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`rounded-xl text-xs sm:text-sm h-9 px-3 font-medium transition-all ${
+                    viewState === "admin-ml"
+                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Cpu className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+                  <span>ML Ops Center</span>
+                </Button>
+
                 <div className="h-4 w-px bg-border mx-0.5 hidden sm:block" />
 
                 {/* Profile Pill */}
@@ -800,6 +823,18 @@ export default function HomePage() {
               </>
             ) : (
               <div className="flex items-center gap-2 sm:gap-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setViewState("admin-ml");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="rounded-xl text-xs sm:text-sm h-9 px-3 text-muted-foreground hover:text-foreground"
+                >
+                  <Cpu className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+                  <span>ML Ops</span>
+                </Button>
                 <Link
                   href="/auth/login"
                   className="text-xs sm:text-sm text-foreground hover:text-primary transition-colors px-3 py-1.5 font-medium"
@@ -1011,6 +1046,39 @@ export default function HomePage() {
                 onRerunProtocol={(proto) => {
                   setSelectedProtocol(proto);
                   setViewState("step-2");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                onOpenMLCenter={() => {
+                  setViewState("admin-ml");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              />
+            </motion.div>
+          )}
+
+          {/* ===================================================================== */}
+          {/* VIEW: ADMIN ML TRAINING & MODEL MANAGEMENT CENTER */}
+          {/* ===================================================================== */}
+          {viewState === "admin-ml" && (
+            <motion.div
+              key="admin-ml"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="flex-1 flex flex-col items-center justify-start w-full"
+            >
+              <AdminMLCenter
+                currentUser={
+                  user || {
+                    id: "admin-default",
+                    email: "admin@epiml.ai",
+                    name: "Agricultural Research Admin",
+                    role: "admin",
+                  }
+                }
+                onBackToDashboard={() => {
+                  setViewState(user ? "dashboard" : "landing");
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
               />
@@ -1602,6 +1670,16 @@ export default function HomePage() {
                 </Card>
 
               </div>
+
+              {/* Real-time Environmental Trajectory Predictor (+15m, +30m, +60m, +6h, +24h ML Model) */}
+              <PredictionDeck
+                currentTemp={telemetry.temperature ?? 24.5}
+                currentHum={telemetry.humidity ?? 75.0}
+                currentSoil={Number((((telemetry.soilMoisture1 ?? 70) + (telemetry.soilMoisture2 ?? 70)) / 2).toFixed(1))}
+                currentGas={telemetry.gasPpm ?? 38}
+                cropName={selectedProtocol.commonName}
+                isLiveHardware={Boolean(telemetry.isLiveHardware)}
+              />
 
               {/* Actuator Trigger Deck & Safety Loop */}
               <Card className="w-full border border-border bg-card p-6 rounded-2xl shadow-xs">
