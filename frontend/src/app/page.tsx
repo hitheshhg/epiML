@@ -30,7 +30,9 @@ import {
   Loader2,
   FlaskConical,
   User as UserIcon,
-  LayoutDashboard
+  LayoutDashboard,
+  Lock,
+  Key,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +43,7 @@ import { DEFAULT_SEED_PROTOCOLS, generateCustomProtocol } from "@/lib/protocols"
 import { evaluateDeterministicControl } from "@/lib/control-engine";
 import { supabase } from "@/lib/supabase/client";
 import LoginModal from "@/components/chiguru/LoginModal";
+import AdminLoginModal from "@/components/chiguru/AdminLoginModal";
 import UserDashboard from "@/components/chiguru/UserDashboard";
 import TraySowingCanvas, { SownSeedPin } from "@/components/chiguru/TraySowingCanvas";
 import AdminMLCenter from "@/components/chiguru/AdminMLCenter";
@@ -74,6 +77,10 @@ export default function HomePage() {
   // Authentication State
   const [user, setUser] = useState<{ id: string; email: string; name?: string } | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Admin-Exclusive Security State (Model Training & Management exclusive to admin)
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
+  const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState<boolean>(false);
 
   // Selected seed protocol
   const [selectedProtocol, setSelectedProtocol] = useState<SeedProtocol>(DEFAULT_SEED_PROTOCOLS[3]); // Default Tomato
@@ -129,6 +136,17 @@ export default function HomePage() {
       if (stored) {
         try {
           setUser(JSON.parse(stored));
+        } catch {}
+      }
+
+      // Check admin clearance session
+      const adminStored = localStorage.getItem("epiml_admin_auth") || sessionStorage.getItem("epiml_admin_auth");
+      if (adminStored) {
+        try {
+          const parsed = JSON.parse(adminStored);
+          if (parsed && (parsed.role === "admin" || parsed.username === "admin")) {
+            setIsAdminAuthenticated(true);
+          }
         } catch {}
       }
 
@@ -700,8 +718,21 @@ export default function HomePage() {
     }
     if (typeof window !== "undefined") {
       localStorage.removeItem("chiguru_auth_user");
+      localStorage.removeItem("epiml_admin_auth");
+      sessionStorage.removeItem("epiml_admin_auth");
     }
     setUser(null);
+    setIsAdminAuthenticated(false);
+  };
+
+  const handleExitAdminMode = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("epiml_admin_auth");
+      sessionStorage.removeItem("epiml_admin_auth");
+    }
+    setIsAdminAuthenticated(false);
+    setViewState(user ? "dashboard" : "landing");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -776,23 +807,36 @@ export default function HomePage() {
                   )}
                 </Button>
 
-                {/* 3. Admin ML Training & Operations Center Tab */}
-                <Button
-                  variant={viewState === "admin-ml" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => {
-                    setViewState("admin-ml");
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  className={`rounded-xl text-xs sm:text-sm h-9 px-3 font-medium transition-all ${
-                    viewState === "admin-ml"
-                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <Cpu className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
-                  <span>ML Ops Center</span>
-                </Button>
+                {/* 3. Admin ML Training & Model Management Tab (Exclusive to Authenticated Admin) */}
+                {isAdminAuthenticated ? (
+                  <Button
+                    variant={viewState === "admin-ml" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setViewState("admin-ml");
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className={`rounded-xl text-xs sm:text-sm h-9 px-3 font-medium transition-all ${
+                      viewState === "admin-ml"
+                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                        : "border-primary/40 text-primary hover:bg-primary/10"
+                    }`}
+                  >
+                    <Shield className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+                    <span>Admin ML Center</span>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsAdminAuthModalOpen(true)}
+                    className="rounded-xl text-xs sm:text-sm h-9 px-2.5 text-muted-foreground hover:text-foreground"
+                    title="Administrator Model Management Portal"
+                  >
+                    <Lock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+                    <span>Admin Portal</span>
+                  </Button>
+                )}
 
                 <div className="h-4 w-px bg-border mx-0.5 hidden sm:block" />
 
@@ -826,14 +870,12 @@ export default function HomePage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setViewState("admin-ml");
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  className="rounded-xl text-xs sm:text-sm h-9 px-3 text-muted-foreground hover:text-foreground"
+                  onClick={() => setIsAdminAuthModalOpen(true)}
+                  className="rounded-xl text-xs sm:text-sm h-9 px-2.5 text-muted-foreground hover:text-foreground"
+                  title="Admin Security Portal"
                 >
-                  <Cpu className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
-                  <span>ML Ops</span>
+                  <Lock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+                  <span>Admin</span>
                 </Button>
                 <Link
                   href="/auth/login"
@@ -1049,15 +1091,21 @@ export default function HomePage() {
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
                 onOpenMLCenter={() => {
-                  setViewState("admin-ml");
+                  if (isAdminAuthenticated) {
+                    setViewState("admin-ml");
+                  } else {
+                    setIsAdminAuthModalOpen(true);
+                  }
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
+                isAdmin={isAdminAuthenticated}
+                onOpenAdminLogin={() => setIsAdminAuthModalOpen(true)}
               />
             </motion.div>
           )}
 
           {/* ===================================================================== */}
-          {/* VIEW: ADMIN ML TRAINING & MODEL MANAGEMENT CENTER */}
+          {/* VIEW: ADMIN ML TRAINING & MODEL MANAGEMENT CENTER (ADMIN-EXCLUSIVE) */}
           {/* ===================================================================== */}
           {viewState === "admin-ml" && (
             <motion.div
@@ -1066,22 +1114,124 @@ export default function HomePage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.4 }}
-              className="flex-1 flex flex-col items-center justify-start w-full"
+              className="flex-1 flex flex-col items-center justify-start w-full px-4 sm:px-6 py-8"
             >
-              <AdminMLCenter
-                currentUser={
-                  user || {
-                    id: "admin-default",
-                    email: "admin@epiml.ai",
-                    name: "Agricultural Research Admin",
-                    role: "admin",
-                  }
-                }
-                onBackToDashboard={() => {
-                  setViewState(user ? "dashboard" : "landing");
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-              />
+              {!isAdminAuthenticated ? (
+                <div className="w-full max-w-md mx-auto py-8">
+                  <Card className="p-8 rounded-2xl border border-border bg-card shadow-xl space-y-6">
+                    <div className="flex items-center gap-3 border-b border-border pb-4">
+                      <div className="w-10 h-10 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center">
+                        <Lock className="w-5 h-5 text-destructive" />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-semibold text-foreground tracking-tight">
+                          Admin Clearance Gate
+                        </h2>
+                        <Badge variant="outline" className="text-[10px] font-mono border-destructive/30 text-destructive">
+                          ML Center Restricted
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Model training, multi-user experimental telemetry aggregation, and production model deployment are <strong>exclusive to the Administrator Dashboard</strong>. Please enter the admin credentials below to unlock.
+                    </p>
+
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const target = e.currentTarget;
+                        const u = (target.elements.namedItem("gate_user") as HTMLInputElement)?.value.trim().toLowerCase();
+                        const p = (target.elements.namedItem("gate_pass") as HTMLInputElement)?.value.trim();
+                        if ((u === "admin" || u === "admin@epiml.ai" || u === "administrator") && p === "admin") {
+                          const sess = { username: u, role: "admin", authenticatedAt: new Date().toISOString() };
+                          localStorage.setItem("epiml_admin_auth", JSON.stringify(sess));
+                          sessionStorage.setItem("epiml_admin_auth", JSON.stringify(sess));
+                          setIsAdminAuthenticated(true);
+                        } else {
+                          alert("Invalid credentials! Access requires admin username and admin password.");
+                        }
+                      }}
+                      className="space-y-4"
+                    >
+                      <div>
+                        <label className="block text-xs font-medium text-foreground mb-1">
+                          Admin Username
+                        </label>
+                        <Input
+                          name="gate_user"
+                          type="text"
+                          defaultValue="admin"
+                          className="rounded-xl h-10 text-xs font-mono"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-foreground mb-1">
+                          Admin Password
+                        </label>
+                        <Input
+                          name="gate_pass"
+                          type="password"
+                          placeholder="•••••"
+                          className="rounded-xl h-10 text-xs font-mono"
+                          required
+                        />
+                      </div>
+                      <div className="pt-2 flex items-center justify-between gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setViewState(user ? "dashboard" : "landing")}
+                          className="w-1/2 rounded-xl text-xs h-10"
+                        >
+                          Return to App
+                        </Button>
+                        <Button
+                          type="submit"
+                          className="w-1/2 rounded-xl bg-primary text-primary-foreground font-semibold text-xs h-10"
+                        >
+                          Unlock ML Center
+                        </Button>
+                      </div>
+                    </form>
+                  </Card>
+                </div>
+              ) : (
+                <div className="w-full space-y-4">
+                  {/* Active Admin Session Status Bar */}
+                  <div className="max-w-6xl mx-auto w-full px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-xs flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="font-semibold">Administrator Session Active:</span>
+                      <span className="font-mono">admin</span>
+                      <span className="hidden sm:inline opacity-70">• Model Training & Deployment Controls Unlocked</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExitAdminMode}
+                      className="h-7 px-2.5 rounded-lg text-[11px] border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
+                    >
+                      <LogOut className="w-3 h-3 mr-1" />
+                      Exit Admin Mode
+                    </Button>
+                  </div>
+
+                  <AdminMLCenter
+                    currentUser={{
+                      id: "admin-master",
+                      email: "admin@epiml.ai",
+                      name: "System Administrator",
+                      role: "admin",
+                    }}
+                    onBackToDashboard={() => {
+                      setViewState(user ? "dashboard" : "landing");
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                  />
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -2011,6 +2161,18 @@ export default function HomePage() {
           setUser(authedUser);
           setIsAuthModalOpen(false);
           setViewState("dashboard");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+      />
+
+      {/* Admin Clearance Gate Modal (Exclusive to Model Training & Management) */}
+      <AdminLoginModal
+        isOpen={isAdminAuthModalOpen}
+        onClose={() => setIsAdminAuthModalOpen(false)}
+        onSuccess={() => {
+          setIsAdminAuthenticated(true);
+          setIsAdminAuthModalOpen(false);
+          setViewState("admin-ml");
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
       />

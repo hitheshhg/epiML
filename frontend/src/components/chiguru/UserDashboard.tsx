@@ -26,6 +26,8 @@ import {
   Trash2,
   Database,
   Cpu,
+  Lock,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +74,8 @@ interface UserDashboardProps {
   onResumeActiveExperiment: (exp?: UserExperimentHistory) => void;
   onRerunProtocol: (protocol: SeedProtocol) => void;
   onOpenMLCenter?: () => void;
+  isAdmin?: boolean;
+  onOpenAdminLogin?: () => void;
 }
 
 export default function UserDashboard({
@@ -80,6 +84,8 @@ export default function UserDashboard({
   onResumeActiveExperiment,
   onRerunProtocol,
   onOpenMLCenter,
+  isAdmin = false,
+  onOpenAdminLogin,
 }: UserDashboardProps) {
   const [filter, setFilter] = useState<"all" | "completed" | "running">("all");
   const [search, setSearch] = useState("");
@@ -430,15 +436,29 @@ export default function UserDashboard({
               <ArrowRight className="w-4 h-4" />
             </Button>
 
-            {onOpenMLCenter && (
-              <Button
-                onClick={onOpenMLCenter}
-                variant="outline"
-                className="h-11 px-4 rounded-xl border border-border bg-card hover:bg-muted text-foreground flex items-center justify-center gap-2 text-xs sm:text-sm font-medium"
-              >
-                <Cpu className="w-4 h-4 text-emerald-500" />
-                <span>Admin ML Center</span>
-              </Button>
+            {isAdmin ? (
+              onOpenMLCenter && (
+                <Button
+                  onClick={onOpenMLCenter}
+                  variant="outline"
+                  className="h-11 px-4 rounded-xl border border-primary/40 bg-card hover:bg-muted text-primary flex items-center justify-center gap-2 text-xs sm:text-sm font-medium"
+                >
+                  <Cpu className="w-4 h-4 text-emerald-500" />
+                  <span>Admin ML Center</span>
+                </Button>
+              )
+            ) : (
+              onOpenAdminLogin && (
+                <Button
+                  onClick={onOpenAdminLogin}
+                  variant="ghost"
+                  className="h-11 px-3 rounded-xl text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5 text-xs font-medium"
+                  title="Admin-only Model Management"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Admin Portal</span>
+                </Button>
+              )
             )}
           </div>
 

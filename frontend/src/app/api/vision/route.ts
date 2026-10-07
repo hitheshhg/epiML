@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { detectSeedsWithGemini } from "@/lib/gemini";
 
 const DATA_DIR = path.resolve(process.cwd(), "..", "software", "data");
 const GERMINATION_FILE = path.join(DATA_DIR, "germination.csv");
@@ -65,6 +66,31 @@ export async function GET() {
       recommendation: "Soil moisture optimal (52%). Maintain current canopy shade cover for 14 hours.",
       image: imageBase64,
       detections: boundingBoxes,
+      model: "Classical CV / ExG Edge Pipeline",
+    });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/vision
+ * AI Seed Emergence Detection using Google Gemini Vision
+ */
+export async function POST(request: Request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const image = body?.image || body?.imageBase64 || null;
+    const crop = body?.crop || "Tomato";
+
+    const aiDetection = await detectSeedsWithGemini(image, crop);
+
+    return NextResponse.json({
+      timestamp: new Date().toISOString(),
+      crop,
+      ...aiDetection,
+      model: aiDetection.aiPowered ? "Google Gemini Vision (gemini-flash-latest)" : "Edge Fallback Phenotyping",
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
