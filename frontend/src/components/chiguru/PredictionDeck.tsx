@@ -30,27 +30,27 @@ interface PredictionDeckProps {
 }
 
 interface PredictionData {
-  timestamp: string;
-  horizon_minutes: number;
-  predictions: {
-    aqi: number;
-    temperature_c: number;
-    humidity_pct: number;
-    soil_moisture_pct: number;
+  timestamp?: string;
+  horizon_minutes?: number;
+  predictions?: {
+    aqi?: number;
+    temperature_c?: number;
+    humidity_pct?: number;
+    soil_moisture_pct?: number;
   };
-  confidence: {
-    aqi: number;
-    temperature: number;
-    humidity: number;
-    soil_moisture: number;
+  confidence?: {
+    aqi?: number;
+    temperature?: number;
+    humidity?: number;
+    soil_moisture?: number;
   };
   intervals?: {
-    aqi: [number, number];
-    temperature_c: [number, number];
-    humidity_pct: [number, number];
-    soil_moisture_pct: [number, number];
+    aqi?: [number, number];
+    temperature_c?: [number, number];
+    humidity_pct?: [number, number];
+    soil_moisture_pct?: [number, number];
   };
-  model_version: string;
+  model_version?: string;
   method?: string;
 }
 
@@ -202,7 +202,9 @@ export default function PredictionDeck({
               Temperature
             </span>
             <Badge variant="outline" className="text-[10px] font-mono">
-              ±{prediction?.intervals ? ((prediction.intervals.temperature_c[1] - prediction.intervals.temperature_c[0]) / 2).toFixed(1) : "0.8"}°C
+              ±{prediction?.intervals?.temperature_c?.[0] != null && prediction?.intervals?.temperature_c?.[1] != null
+                ? ((prediction.intervals.temperature_c[1] - prediction.intervals.temperature_c[0]) / 2).toFixed(1)
+                : "0.8"}°C
             </Badge>
           </div>
 
@@ -218,7 +220,7 @@ export default function PredictionDeck({
                 +{horizonMinutes}m Forecast
               </div>
               <div className="text-2xl font-mono font-semibold text-primary">
-                {prediction ? prediction.predictions.temperature_c.toFixed(1) : currentTemp.toFixed(1)}°C
+                {prediction?.predictions?.temperature_c != null ? prediction.predictions.temperature_c.toFixed(1) : currentTemp.toFixed(1)}°C
               </div>
             </div>
           </div>
@@ -226,7 +228,7 @@ export default function PredictionDeck({
           <div className="pt-2 border-t border-border/50 text-[11px] font-mono text-muted-foreground flex justify-between">
             <span>Interval (95%):</span>
             <span>
-              {prediction?.intervals
+              {prediction?.intervals?.temperature_c?.[0] != null && prediction?.intervals?.temperature_c?.[1] != null
                 ? `[${prediction.intervals.temperature_c[0].toFixed(1)}° - ${prediction.intervals.temperature_c[1].toFixed(1)}°]`
                 : `[${(currentTemp - 0.8).toFixed(1)}° - ${(currentTemp + 0.8).toFixed(1)}°]`}
             </span>
@@ -241,7 +243,9 @@ export default function PredictionDeck({
               Humidity
             </span>
             <Badge variant="outline" className="text-[10px] font-mono">
-              ±{prediction?.intervals ? ((prediction.intervals.humidity_pct[1] - prediction.intervals.humidity_pct[0]) / 2).toFixed(1) : "2.5"}%
+              ±{prediction?.intervals?.humidity_pct?.[0] != null && prediction?.intervals?.humidity_pct?.[1] != null
+                ? ((prediction.intervals.humidity_pct[1] - prediction.intervals.humidity_pct[0]) / 2).toFixed(1)
+                : "2.5"}%
             </Badge>
           </div>
 
@@ -257,7 +261,7 @@ export default function PredictionDeck({
                 +{horizonMinutes}m Forecast
               </div>
               <div className="text-2xl font-mono font-semibold text-primary">
-                {prediction ? prediction.predictions.humidity_pct.toFixed(1) : currentHum.toFixed(1)}%
+                {prediction?.predictions?.humidity_pct != null ? prediction.predictions.humidity_pct.toFixed(1) : currentHum.toFixed(1)}%
               </div>
             </div>
           </div>
@@ -265,7 +269,7 @@ export default function PredictionDeck({
           <div className="pt-2 border-t border-border/50 text-[11px] font-mono text-muted-foreground flex justify-between">
             <span>Interval (95%):</span>
             <span>
-              {prediction?.intervals
+              {prediction?.intervals?.humidity_pct?.[0] != null && prediction?.intervals?.humidity_pct?.[1] != null
                 ? `[${prediction.intervals.humidity_pct[0].toFixed(1)}% - ${prediction.intervals.humidity_pct[1].toFixed(1)}%]`
                 : `[${(currentHum - 2.5).toFixed(1)}% - ${(currentHum + 2.5).toFixed(1)}%]`}
             </span>
@@ -280,7 +284,9 @@ export default function PredictionDeck({
               Soil Moisture
             </span>
             <Badge variant="outline" className="text-[10px] font-mono">
-              ±{prediction?.intervals ? ((prediction.intervals.soil_moisture_pct[1] - prediction.intervals.soil_moisture_pct[0]) / 2).toFixed(1) : "2.0"}%
+              ±{prediction?.intervals?.soil_moisture_pct?.[0] != null && prediction?.intervals?.soil_moisture_pct?.[1] != null
+                ? ((prediction.intervals.soil_moisture_pct[1] - prediction.intervals.soil_moisture_pct[0]) / 2).toFixed(1)
+                : "2.0"}%
             </Badge>
           </div>
 
@@ -296,7 +302,7 @@ export default function PredictionDeck({
                 +{horizonMinutes}m Forecast
               </div>
               <div className="text-2xl font-mono font-semibold text-primary">
-                {prediction ? prediction.predictions.soil_moisture_pct.toFixed(1) : currentSoil.toFixed(1)}%
+                {prediction?.predictions?.soil_moisture_pct != null ? prediction.predictions.soil_moisture_pct.toFixed(1) : currentSoil.toFixed(1)}%
               </div>
             </div>
           </div>
@@ -304,7 +310,7 @@ export default function PredictionDeck({
           <div className="pt-2 border-t border-border/50 text-[11px] font-mono text-muted-foreground flex justify-between">
             <span>Interval (95%):</span>
             <span>
-              {prediction?.intervals
+              {prediction?.intervals?.soil_moisture_pct?.[0] != null && prediction?.intervals?.soil_moisture_pct?.[1] != null
                 ? `[${prediction.intervals.soil_moisture_pct[0].toFixed(1)}% - ${prediction.intervals.soil_moisture_pct[1].toFixed(1)}%]`
                 : `[${(currentSoil - 2.0).toFixed(1)}% - ${(currentSoil + 2.0).toFixed(1)}%]`}
             </span>
@@ -335,7 +341,7 @@ export default function PredictionDeck({
                 +{horizonMinutes}m Forecast
               </div>
               <div className="text-2xl font-mono font-semibold text-primary">
-                AQI {prediction ? prediction.predictions.aqi.toFixed(0) : currentEstAQI}
+                AQI {prediction?.predictions?.aqi != null ? prediction.predictions.aqi.toFixed(0) : currentEstAQI}
               </div>
             </div>
           </div>
@@ -343,7 +349,7 @@ export default function PredictionDeck({
           <div className="pt-2 border-t border-border/50 text-[11px] font-mono text-muted-foreground flex justify-between">
             <span>Confidence Index:</span>
             <span>
-              {prediction ? `${(prediction.confidence.aqi * 100).toFixed(0)}% Statistical Fit` : "91% Baseline"}
+              {prediction?.confidence?.aqi != null ? `${(prediction.confidence.aqi * 100).toFixed(0)}% Statistical Fit` : "91% Baseline"}
             </span>
           </div>
         </div>
