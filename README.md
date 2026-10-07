@@ -42,8 +42,8 @@
 ```
 terrabyte/
 ├── firmware/
-│   └── Chiguru/
-│       └── Chiguru.ino             # Full non-blocking Arduino Uno firmware (Phase 1 & 2)
+│   └── epiML/
+│       └── epiML.ino               # Full non-blocking Arduino Uno firmware (Real-time AQI, VPD, Temp, Humid, Soil)
 ├── software/
 │   ├── bridge.py                   # Auto-reconnecting PySerial to CSV/Socket bridge
 │   ├── dashboard.py                # Mobile-friendly 4-language offline Streamlit UI (Phone Remote)
@@ -78,7 +78,7 @@ terrabyte/
 ## ⚡ Quick Start Guide
 
 ### 1. Flash Arduino Firmware
-1. Open [`firmware/Chiguru/Chiguru.ino`](file:///c:/Users/gurud/OneDrive/Desktop/terrabyte/firmware/Chiguru/Chiguru.ino) in the Arduino IDE.
+1. Open [`firmware/epiML/epiML.ino`](file:///c:/Users/gurud/OneDrive/Desktop/terrabyte/firmware/epiML/epiML.ino) in the Arduino IDE.
 2. Select **Board: Arduino Uno** and your COM port.
 3. Click **Upload**. On boot, observe LCD splash screen and diagnostic sensor self-test.
 

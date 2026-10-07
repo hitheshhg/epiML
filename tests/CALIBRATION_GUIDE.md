@@ -15,9 +15,9 @@ Soil moisture sensors output an analog voltage proportional to dielectric permit
    - Open Arduino Serial Monitor at 115200 baud.
    - Note the raw ADC value printed (field index 5 or 6).
    - Expected Dry ADC: **$800 \sim 860$**.
-   - Set constant in `Chiguru.ino`:
+   - Set constant in `epiML.ino`:
      ```cpp
-     const int SOIL_RAW_DRY = 820; // Update with observed dry value
+     int M1_DRY = 820; // Update with observed dry value
      ```
 
 2. **Saturation Calibration (100% Water Point):**
@@ -25,9 +25,9 @@ Soil moisture sensors output an analog voltage proportional to dielectric permit
    - Wait 5 seconds for readings to stabilize.
    - Note the raw ADC value printed.
    - Expected Wet ADC: **$260 \sim 320$**.
-   - Set constant in `Chiguru.ino`:
+   - Set constant in `epiML.ino`:
      ```cpp
-     const int SOIL_RAW_WET = 290; // Update with observed wet value
+     int M1_WET = 290; // Update with observed wet value
      ```
 
 3. **Field Normalization Verification:**
@@ -46,7 +46,7 @@ The MQ-135 utilizes a heated Tin Dioxide ($\text{SnO}_2$) ceramic substrate. In 
    - Power the Arduino at least **5 to 10 minutes** before judging.
    - Touch the MQ-135 metal cap: It should feel gently warm to the touch (indicating normal operation of the internal 5V heating coil).
 2. **Dynamic Auto-Zeroing Baseline:**
-   - `Chiguru.ino` samples the first 20 readings upon boot and computes dynamic baseline average:
+   - `epiML.ino` samples the first 20 readings upon boot and computes dynamic baseline average:
      $$G_0 = \frac{1}{20}\sum_{i=1}^{20} \text{ADC}_i$$
    - In a typical hackathon room, clean ambient air yields an ADC reading between **$90 \sim 140$**.
 3. **Threshold Calibration:**
@@ -66,7 +66,7 @@ The MQ-135 utilizes a heated Tin Dioxide ($\text{SnO}_2$) ceramic substrate. In 
 
 ---
 
-## 4. Quick Constant Modification Cheat Sheet (Top of `Chiguru.ino`)
+## 4. Quick Constant Modification Cheat Sheet (Top of `epiML.ino`)
 
 ```cpp
 // ==========================================
