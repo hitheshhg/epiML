@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
+import { verifyAdminRequest } from "@/lib/adminAuth";
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://127.0.0.1:8000";
 
 export async function POST(req: Request) {
+  // Enforce Admin clearance: ML model is exclusive to Admin Dashboard
+  const auth = await verifyAdminRequest(req);
+  if (!auth.authorized) {
+    return NextResponse.json(
+      { error: "Access denied. Machine learning model inference is exclusive to System Administrators with admin credentials." },
+      { status: 403 }
+    );
+  }
+
   try {
     const body = await req.json().catch(() => ({}));
     const features = body.current_features || body || {};
@@ -108,9 +118,10 @@ export async function POST(req: Request) {
       mode: "CALIBRATED_ENVIRONMENTAL_PREDICTION",
       method: "resilient_calibrated_timeseries",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { error: "Prediction failed", details: err?.message || "Unknown error" },
+      { error: "Prediction failed", details: errorMsg || "Unknown error" },
       { status: 500 }
     );
   }

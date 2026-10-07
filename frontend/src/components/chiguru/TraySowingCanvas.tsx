@@ -491,7 +491,7 @@ export default function TraySowingCanvas({
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 p-3 rounded-xl border border-border">
           <Info className="w-4 h-4 text-primary shrink-0" />
           <span>
-            <strong>Pro Tip:</strong> Click any mud cell to place a seed pin. Tap an existing pin to remove it. You can also click <em>"Auto-Fill 40 Cells"</em> for immediate standard 5×8 nursery placement.
+            <strong>Pro Tip:</strong> Click any mud cell to place a seed pin. Tap an existing pin to remove it. You can also click <em>&ldquo;Auto-Fill 40 Cells&rdquo;</em> for immediate standard 5×8 nursery placement.
           </span>
         </div>
 

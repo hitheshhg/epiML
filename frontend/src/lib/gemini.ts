@@ -1,8 +1,29 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import fs from "fs";
+import path from "path";
 import { PlantProfileSchema, ValidatedPlantProfile } from "@/schemas/plant";
 import { matchScientificNameWithGbif } from "./gbif";
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
+
+/**
+ * Resilient API Key resolver for Gemini
+ */
+export function getGeminiApiKey(): string | undefined {
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 10) return process.env.GEMINI_API_KEY;
+  if (process.env.GOOGLE_API_KEY && process.env.GOOGLE_API_KEY.length > 10) return process.env.GOOGLE_API_KEY;
+  try {
+    const envPath = path.resolve(process.cwd(), ".env.local");
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, "utf-8");
+      const match = content.match(/^(?:GEMINI_API_KEY|GOOGLE_API_KEY)=(.*)$/m);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+  } catch {}
+  return undefined;
+}
 
 // Comprehensive offline scientific botanical profiles for zero-failure fallback
 const OFFLINE_BOTANICAL_DB: Record<string, Partial<ValidatedPlantProfile>> = {
@@ -260,7 +281,7 @@ export async function identifyAndProfilePlant(
   let rawProfileData: any = null;
 
   // 2. Try Gemini API if key is available in environment
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const apiKey = getGeminiApiKey();
   if (apiKey && apiKey.length > 5) {
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
@@ -401,7 +422,7 @@ export async function detectSeedsWithGemini(
   imageBase64?: string | null,
   cropName: string = "Seedlings"
 ): Promise<SeedDetectionResult> {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const apiKey = getGeminiApiKey();
 
   if (apiKey && imageBase64 && imageBase64.length > 50) {
     try {

@@ -114,7 +114,7 @@ export default function CropAdaptiveControl({
               Adaptive Biological Control Engine
             </h2>
             <p className="text-sm text-[#D8F3DC]/80 mt-1 max-w-2xl">
-              <strong className="text-white">One Hardware Platform + Multiple Plant Profiles.</strong> Hardware automatically adapts its irrigation thresholds, louver angles, and refusal rules to the selected crop's biological profile.
+              <strong className="text-white">One Hardware Platform + Multiple Plant Profiles.</strong> Hardware automatically adapts its irrigation thresholds, louver angles, and refusal rules to the selected crop&apos;s biological profile.
             </p>
           </div>
 
@@ -352,7 +352,7 @@ export default function CropAdaptiveControl({
             {/* Big Causal Explanation Paragraph */}
             <div className="p-4 rounded-xl bg-[#FAFBF9] border border-[#E2E8DC] my-3">
               <p className="text-sm font-semibold text-[#163828] leading-relaxed">
-                "{decision.explanation}"
+                &ldquo;{decision.explanation}&rdquo;
               </p>
             </div>
 

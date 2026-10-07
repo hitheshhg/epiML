@@ -4,7 +4,7 @@ import { verifyAdminRequest } from "@/lib/adminAuth";
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://127.0.0.1:8000";
 
 // Fallback job state when standalone service is running local jobs
-let LOCAL_JOBS: any[] = [
+const LOCAL_JOBS: any[] = [
   {
     job_id: "JOB-ALPHA-01",
     job_name: "Baseline Multi-Target XGBoost Benchmark",

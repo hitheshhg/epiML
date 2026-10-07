@@ -90,26 +90,14 @@ export default function UserDashboard({
   const [filter, setFilter] = useState<"all" | "completed" | "running">("all");
   const [search, setSearch] = useState("");
   // Start accurately at 0 experiments for the user — completely clean
-  const [histories, setHistories] = useState<UserExperimentHistory[]>([]);
-  const [profileDetails, setProfileDetails] = useState<{
-    role: string;
-    preferredCrop: string;
-  }>({
-    role: "Lead Research Scientist",
-    preferredCrop: "Tomato (Solanum lycopersicum)",
-  });
-
-  // Load user profile details and experiments from Supabase / localStorage
-  useEffect(() => {
-    // 1. Check local storage cache and PURGE any legacy fake experiment records
+  const [histories, setHistories] = useState<UserExperimentHistory[]>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("epiml_user_experiments");
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
-            // Actively filter out all fake mock IDs
-            const realOnly = parsed.filter(
+            return parsed.filter(
               (item: any) =>
                 item &&
                 item.id &&
@@ -119,14 +107,23 @@ export default function UserDashboard({
                 !item.id.includes("EXP-2026-MAI-007") &&
                 !item.id.includes("EXP-2026-MNG-003")
             );
-            setHistories(realOnly);
-            localStorage.setItem("epiml_user_experiments", JSON.stringify(realOnly));
           }
         } catch {}
       }
     }
+    return [];
+  });
+  const [profileDetails, setProfileDetails] = useState<{
+    role: string;
+    preferredCrop: string;
+  }>({
+    role: "Lead Research Scientist",
+    preferredCrop: "Tomato (Solanum lycopersicum)",
+  });
 
-    // 2. Query Supabase profiles & experiments tables
+  // Load user profile details and experiments from Supabase
+  useEffect(() => {
+    // Query Supabase profiles & experiments tables
     if (supabase && user?.id) {
       // Profile query
       supabase

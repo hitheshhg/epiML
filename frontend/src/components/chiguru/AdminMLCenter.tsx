@@ -33,6 +33,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import PredictionDeck from "@/components/chiguru/PredictionDeck";
 
 interface AdminMLCenterProps {
   onBackToDashboard: () => void;
@@ -47,7 +48,7 @@ interface AdminMLCenterProps {
 export default function AdminMLCenter({ onBackToDashboard, currentUser }: AdminMLCenterProps) {
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<
-    "overview" | "explorer" | "datasets" | "training" | "models" | "drift"
+    "overview" | "explorer" | "datasets" | "training" | "models" | "drift" | "inference"
   >("overview");
 
   // Overview stats state
@@ -501,6 +502,18 @@ export default function AdminMLCenter({ onBackToDashboard, currentUser }: AdminM
         >
           <TrendingUp className="w-3.5 h-3.5" />
           <span>Drift Monitoring</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("inference")}
+          className={`px-4 py-2 rounded-t-xl font-medium transition-all flex items-center gap-2 border-b-2 ${
+            activeTab === "inference"
+              ? "border-primary text-primary font-semibold bg-primary/5"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Cpu className="w-3.5 h-3.5" />
+          <span>Live Model Inference</span>
         </button>
       </div>
 
@@ -1056,7 +1069,7 @@ export default function AdminMLCenter({ onBackToDashboard, currentUser }: AdminM
                 <div className="p-3 rounded-xl bg-black/90 text-emerald-400 font-mono text-[11px] h-64 overflow-y-auto space-y-1.5">
                   {activeJobLogs.length === 0 ? (
                     <span className="text-muted-foreground block text-center mt-20">
-                      // Worker ready. Awaiting training dispatch...
+                      {"// Worker ready. Awaiting training dispatch..."}
                     </span>
                   ) : (
                     activeJobLogs.map((l, i) => (
@@ -1245,6 +1258,36 @@ export default function AdminMLCenter({ onBackToDashboard, currentUser }: AdminM
               <span>Records Evaluated: {driftData.records_evaluated || 7192}</span>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 7: LIVE MODEL INFERENCE & PREDICTOR */}
+      {/* ========================================================================= */}
+      {activeTab === "inference" && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">
+                Deployed Champion Model Inference Console
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Execute live multi-horizon forecasting (+15m, +30m, +60m, +6h, +24h) against active champion model {activeModelVersion} with empirical prediction intervals.
+              </p>
+            </div>
+            <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-xs font-mono">
+              Active: {activeModelVersion}
+            </Badge>
+          </div>
+
+          <PredictionDeck
+            currentTemp={Number(stats?.averageTemp ?? 24.8)}
+            currentHum={Number(stats?.averageHum ?? 76.5)}
+            currentSoil={71.0}
+            currentGas={38.0}
+            cropName="Tomato"
+            isLiveHardware={true}
+          />
         </div>
       )}
 

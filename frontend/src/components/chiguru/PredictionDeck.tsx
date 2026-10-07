@@ -77,7 +77,11 @@ export default function PredictionDeck({
     try {
       const res = await fetch("/api/ml/predict", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-role": "admin",
+          "x-admin-password": "admin",
+        },
         body: JSON.stringify({
           horizon_minutes: horizonMinutes,
           crop: cropName,

@@ -12,8 +12,8 @@ export async function GET() {
     let sproutCount = 34;
     let totalSeeds = 40;
     let germinationPct = 85.0;
-    let canopyCoverage = 18.4;
-    let vigorScore = 91;
+    const canopyCoverage = 18.4;
+    const vigorScore = 91;
     let timestamp = new Date().toISOString();
 
     if (fs.existsSync(GERMINATION_FILE)) {
