@@ -1,7 +1,7 @@
 {
   "active_version": "v_test_e2e",
   "previous_version": null,
-  "updated_at": "2026-10-07T05:45:40Z",
+  "updated_at": "2026-10-07T09:05:42Z",
   "models": {
     "v_test_e2e": {
       "model_id": "MOD-v_test_e2e",
@@ -117,74 +117,74 @@
         "aqi_roll_median_12"
       ],
       "metrics": {
-        "overall_mae": 0.157,
-        "overall_rmse": 0.207,
-        "overall_r2": 0.6508,
-        "training_duration_seconds": 2.04,
+        "overall_mae": 0.318,
+        "overall_rmse": 0.379,
+        "overall_r2": 0.8574,
+        "training_duration_seconds": 1.23,
         "target_metrics": {
           "aqi": {
             "algorithm": "RandomForest",
             "validation": {
-              "mae": 0.196,
-              "rmse": 0.236,
-              "r2": 0.9884,
-              "mape": 0.52
+              "mae": 0.607,
+              "rmse": 0.669,
+              "r2": 0.9019,
+              "mape": 1.59
             },
             "test": {
-              "mae": 0.166,
-              "rmse": 0.207,
-              "r2": 0.9618,
-              "mape": 0.4
+              "mae": 0.397,
+              "rmse": 0.458,
+              "r2": 0.8611,
+              "mape": 0.97
             },
-            "residual_std": 0.197
+            "residual_std": 0.453
           },
           "temperature_c": {
             "algorithm": "RandomForest",
             "validation": {
-              "mae": 0.106,
-              "rmse": 0.118,
-              "r2": 0.9946,
-              "mape": 0.47
+              "mae": 0.557,
+              "rmse": 0.584,
+              "r2": 0.8621,
+              "mape": 2.43
             },
             "test": {
-              "mae": 0.106,
-              "rmse": 0.126,
-              "r2": 0.9777,
-              "mape": 0.42
+              "mae": 0.257,
+              "rmse": 0.293,
+              "r2": 0.8729,
+              "mape": 1.01
             },
-            "residual_std": 0.116
+            "residual_std": 0.285
           },
           "humidity_pct": {
             "algorithm": "RandomForest",
             "validation": {
-              "mae": 0.238,
-              "rmse": 0.285,
-              "r2": 0.9955,
-              "mape": 0.3
+              "mae": 1.568,
+              "rmse": 1.704,
+              "r2": 0.8403,
+              "mape": 2.03
             },
             "test": {
-              "mae": 0.181,
-              "rmse": 0.23,
-              "r2": 0.9897,
-              "mape": 0.25
+              "mae": 0.529,
+              "rmse": 0.653,
+              "r2": 0.9117,
+              "mape": 0.73
             },
-            "residual_std": 0.226
+            "residual_std": 0.644
           },
           "soil_moisture_pct": {
-            "algorithm": "XGBoost",
+            "algorithm": "RandomForest",
             "validation": {
-              "mae": 0.295,
-              "rmse": 0.401,
-              "r2": 0.0802,
-              "mape": 0.41
+              "mae": 0.106,
+              "rmse": 0.14,
+              "r2": 0.9024,
+              "mape": 0.15
             },
             "test": {
-              "mae": 0.174,
-              "rmse": 0.267,
-              "r2": -0.3258,
-              "mape": 0.25
+              "mae": 0.089,
+              "rmse": 0.113,
+              "r2": 0.7841,
+              "mape": 0.13
             },
-            "residual_std": 0.227
+            "residual_std": 0.112
           }
         },
         "leaderboard": {
@@ -192,19 +192,19 @@
             {
               "algorithm": "XGBoost",
               "val_metrics": {
-                "mae": 0.915,
-                "rmse": 1.087,
-                "r2": 0.7536,
-                "mape": 2.43
+                "mae": 0.802,
+                "rmse": 1.001,
+                "r2": 0.7801,
+                "mape": 2.13
               }
             },
             {
               "algorithm": "RandomForest",
               "val_metrics": {
-                "mae": 0.196,
-                "rmse": 0.236,
-                "r2": 0.9884,
-                "mape": 0.52
+                "mae": 0.607,
+                "rmse": 0.669,
+                "r2": 0.9019,
+                "mape": 1.59
               }
             }
           ],
@@ -212,19 +212,19 @@
             {
               "algorithm": "XGBoost",
               "val_metrics": {
-                "mae": 0.633,
-                "rmse": 0.739,
-                "r2": 0.7884,
-                "mape": 2.81
+                "mae": 0.592,
+                "rmse": 0.675,
+                "r2": 0.8157,
+                "mape": 2.65
               }
             },
             {
               "algorithm": "RandomForest",
               "val_metrics": {
-                "mae": 0.106,
-                "rmse": 0.118,
-                "r2": 0.9946,
-                "mape": 0.47
+                "mae": 0.557,
+                "rmse": 0.584,
+                "r2": 0.8621,
+                "mape": 2.43
               }
             }
           ],
@@ -232,19 +232,19 @@
             {
               "algorithm": "XGBoost",
               "val_metrics": {
-                "mae": 1.794,
-                "rmse": 2.151,
-                "r2": 0.7447,
-                "mape": 2.28
+                "mae": 1.839,
+                "rmse": 2.066,
+                "r2": 0.7651,
+                "mape": 2.35
               }
             },
             {
               "algorithm": "RandomForest",
               "val_metrics": {
-                "mae": 0.238,
-                "rmse": 0.285,
-                "r2": 0.9955,
-                "mape": 0.3
+                "mae": 1.568,
+                "rmse": 1.704,
+                "r2": 0.8403,
+                "mape": 2.03
               }
             }
           ],
@@ -252,19 +252,19 @@
             {
               "algorithm": "XGBoost",
               "val_metrics": {
-                "mae": 0.295,
-                "rmse": 0.401,
-                "r2": 0.0802,
-                "mape": 0.41
+                "mae": 0.135,
+                "rmse": 0.205,
+                "r2": 0.7898,
+                "mape": 0.19
               }
             },
             {
               "algorithm": "RandomForest",
               "val_metrics": {
-                "mae": 0.982,
-                "rmse": 1.033,
-                "r2": -5.097,
-                "mape": 1.37
+                "mae": 0.106,
+                "rmse": 0.14,
+                "r2": 0.9024,
+                "mape": 0.15
               }
             }
           ]
@@ -272,7 +272,7 @@
       },
       "artifact_path": "C:\\Users\\gurud\\OneDrive\\Desktop\\terrabyte\\ml-service\\artifacts\\model_v_test_e2e.joblib",
       "status": "ACTIVE",
-      "created_at": "2026-10-07T05:45:40Z"
+      "created_at": "2026-10-07T09:05:41Z"
     }
   }
 }
