@@ -377,6 +377,67 @@ export default function HomePage() {
 
       // Send initial protocol handshake
       await serialWriterRef.current.write(`PROTOCOL:${selectedProtocol.commonName.toUpperCase()}\n`);
+
+      // Start background Web Serial telemetry reader stream
+      if (port.readable) {
+        (async () => {
+          try {
+            const textDecoder = new TextDecoderStream();
+            port.readable.pipeTo(textDecoder.writable);
+            const reader = textDecoder.readable.getReader();
+            let buf = "";
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              if (value) {
+                buf += value;
+                const lines = buf.split("\n");
+                buf = lines.pop() || "";
+                for (const rawLine of lines) {
+                  const line = rawLine.trim();
+                  if (!line) continue;
+                  if (line.startsWith("$EPIML,")) {
+                    const content = line.substring(7).replace(/\*$/, "");
+                    const items = content.split(",");
+                    const kvMap: Record<string, string> = {};
+                    for (const item of items) {
+                      const [k, v] = item.split(":");
+                      if (k && v) kvMap[k.trim()] = v.trim();
+                    }
+                    if (kvMap.T_EFF || kvMap.SOIL_AVG || kvMap.AQI) {
+                      setTelemetry((prev) => ({
+                        ...prev,
+                        timestamp: new Date().toISOString(),
+                        temperature: parseFloat(kvMap.T_EFF) || prev.temperature,
+                        humidity: parseFloat(kvMap.RH_EFF) || prev.humidity,
+                        soilMoisture1: parseInt(kvMap.SOIL_AVG, 10) || prev.soilMoisture1,
+                        gasPpm: parseInt(kvMap.PPM || kvMap.AQI, 10) || prev.gasPpm,
+                        isLiveHardware: true,
+                      }));
+                    }
+                  } else if (line.includes(",")) {
+                    const parts = line.split(",");
+                    if (parts.length >= 11 && !isNaN(parseFloat(parts[1]))) {
+                      setTelemetry((prev) => ({
+                        ...prev,
+                        timestamp: new Date().toISOString(),
+                        temperature: parseFloat(parts[3]) || parseFloat(parts[1]) || prev.temperature,
+                        humidity: parseFloat(parts[4]) || parseFloat(parts[2]) || prev.humidity,
+                        soilMoisture1: parseInt(parts[5], 10) || prev.soilMoisture1,
+                        soilMoisture2: parseInt(parts[6], 10) || prev.soilMoisture2,
+                        gasPpm: parseInt(parts[7], 10) || prev.gasPpm,
+                        isLiveHardware: true,
+                      }));
+                    }
+                  }
+                }
+              }
+            }
+          } catch (readerErr) {
+            console.warn("Web Serial stream reader closed:", readerErr);
+          }
+        })();
+      }
     } catch (err) {
       console.warn("Serial connection canceled or failed:", err);
     }

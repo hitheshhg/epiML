@@ -70,6 +70,36 @@ def parse_telemetry_line(raw_line):
     except (ValueError, IndexError):
         return None
 
+def parse_epiml_line(raw_line):
+    """Parses high-precision scientific analysis telemetry: $EPIML,AQI:42,AQI_CAT:GOOD,PPM:38...*"""
+    if not raw_line.startswith("$EPIML,"):
+        return None
+    try:
+        content = raw_line.strip()[7:].rstrip("*")
+        kvs = content.split(",")
+        res = {}
+        for item in kvs:
+            if ":" in item:
+                k, v = item.split(":", 1)
+                k = k.strip().lower()
+                v = v.strip()
+                # Cast numeric fields where applicable
+                if k in ("aqi", "ppm", "soil_avg", "pump", "fan", "vent", "cov"):
+                    try:
+                        res[k] = int(v)
+                    except ValueError:
+                        res[k] = v
+                elif k in ("t_eff", "rh_eff", "vpd", "dew_t"):
+                    try:
+                        res[k] = float(v)
+                    except ValueError:
+                        res[k] = v
+                else:
+                    res[k] = v
+        return res
+    except Exception:
+        return None
+
 def check_and_send_cmd(ser):
     if os.path.exists(CMD_FILE):
         try:
@@ -115,6 +145,14 @@ def main():
             ser.reset_input_buffer()
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Connected successfully to {target_port}! Streaming telemetry...")
 
+            latest_state = {}
+            if os.path.exists(LATEST_FILE):
+                try:
+                    with open(LATEST_FILE, "r", encoding="utf-8") as f:
+                        latest_state = json.load(f)
+                except Exception:
+                    latest_state = {}
+
             while True:
                 # Check for outbound commands
                 check_and_send_cmd(ser)
@@ -129,6 +167,17 @@ def main():
                     if not line:
                         continue
 
+                    # Check for EPIML scientific real-time analysis frame
+                    epiml_data = parse_epiml_line(line)
+                    if epiml_data:
+                        latest_state.update(epiml_data)
+                        latest_state["is_live"] = True
+                        temp_latest = LATEST_FILE + ".tmp"
+                        with open(temp_latest, "w", encoding="utf-8") as f:
+                            json.dump(latest_state, f)
+                        os.replace(temp_latest, LATEST_FILE)
+                        continue
+
                     data = parse_telemetry_line(line)
                     if data:
                         # Append to CSV log
@@ -140,10 +189,11 @@ def main():
                         with open(LOG_FILE, "a", encoding="utf-8") as f:
                             f.write(csv_entry)
 
-                        # Write atomic latest state
+                        # Merge into latest_state and write atomically
+                        latest_state.update(data)
                         temp_latest = LATEST_FILE + ".tmp"
                         with open(temp_latest, "w", encoding="utf-8") as f:
-                            json.dump(data, f)
+                            json.dump(latest_state, f)
                         os.replace(temp_latest, LATEST_FILE)
 
                         # One-line terminal status display
@@ -153,9 +203,11 @@ def main():
                         pump_str = "ON" if data['pump'] else "OFF"
                         fan_str = "ON" if data['fan'] else "OFF"
                         alrt_str = "ALERT!" if data['alert'] else "OK"
+                        aqi_val = latest_state.get("aqi", data.get("gas", 0))
+                        vpd_val = latest_state.get("vpd", 0.85)
 
                         print(f"[{t_str}] [{m_str:11}] T1:{data['temp1']:4.1f}C H1:{data['hum1']:3.0f}% | "
-                              f"M1:{data['soil1']:2d}% M2:{data['soil2']:2d}% | Gas:{data['gas']:3d} | "
+                              f"M1:{data['soil1']:2d}% M2:{data['soil2']:2d}% | AQI:{aqi_val} VPD:{vpd_val} | "
                               f"Pump:{pump_str:3} Fan:{fan_str:3} | [{alrt_str}] | Reason: {data['reason']}")
                 else:
                     time.sleep(0.05)
