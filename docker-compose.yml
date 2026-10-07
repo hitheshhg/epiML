@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # 1. Standalone Python ML Training & Prediction Service (FastAPI)
+  # ============================================================================
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: epiml-ml-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL:-https://qbeqacmwaoufiwhafvyj.supabase.co}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - STORAGE_DIR=/app/artifacts
+      - KAGGLE_USERNAME=${KAGGLE_USERNAME:-}
+      - KAGGLE_KEY=${KAGGLE_KEY:-}
+      - PORT=8000
+      - HOST=0.0.0.0
+    volumes:
+      - epiml_artifacts:/app/artifacts
+      - epiml_kaggle_data:/app/data/kaggle
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - epiml-net
+
+  # ============================================================================
+  # 2. Next.js 14 Frontend Application & Admin Dashboard
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://qbeqacmwaoufiwhafvyj.supabase.co}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+    container_name: epiml-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - ML_SERVICE_URL=http://ml-service:8000
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-https://qbeqacmwaoufiwhafvyj.supabase.co}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - NODE_ENV=production
+    depends_on:
+      ml-service:
+        condition: service_healthy
+    networks:
+      - epiml-net
+
+networks:
+  epiml-net:
+    driver: bridge
+
+volumes:
+  epiml_artifacts:
+    name: epiml_artifacts
+  epiml_kaggle_data:
+    name: epiml_kaggle_data
